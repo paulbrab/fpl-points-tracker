@@ -591,14 +591,23 @@ function worries(mine) {
     const alt = p.available ? cheaperAndBetter(p) : null;
     if (alt) { why.push(`${alt.name} scored ${alt.form - p.form} more (£${fixed(alt.cost)}m)`); level += 1; }
     if (p.run >= 3.8) { why.push('Hard games next'); level += 1; }
-    if (level) list.push({ ...m, why, level: m.bench ? level / 2 : level });
+    if (level) list.push({ ...m, why, alt, level: m.bench ? level / 2 : level });
   }
   return list.sort((a, b) => b.level - a.level);
 }
 
+// Clicking a worry compares it with the player named in the reason, or else the suggested swap.
 function worriesCard(list) {
-  const items = list.slice(0, 5).map((w) => ({ p: w.p, sub: w.why.join(' · '), value: w.bench ? 'bench' : '' }));
-  return pickCard('Worries', 'Players who might cost you points.', items, 'No worries. Nice squad!');
+  const items = list.slice(0, 5).map((w) => {
+    const partner = w.alt ?? w.swap;
+    return {
+      p: w.p,
+      sub: w.why.join(' · '),
+      value: w.bench ? 'bench' : '',
+      onClick: partner ? () => compare([w.p.id, partner.id]) : undefined,
+    };
+  });
+  return pickCard('Worries', 'Players who might cost you points. Click to compare with a better option.', items, 'No worries. Nice squad!');
 }
 
 // For each worry, the best in-form, easy-fixture swap you can afford.
@@ -620,6 +629,7 @@ function transfersCard(mine, list) {
       .sort((a, b) => hotEasy(b) - hotEasy(a))[0];
     if (!best || hotEasy(best) <= hotEasy(out)) continue;
     used.add(best.id);
+    w.swap = best; // lets the worries card compare against the same player
     items.push({
       p: best,
       name: `${out.name} → ${best.name}`,
@@ -668,7 +678,8 @@ function drawAdvice() {
   }
   const mine = squad();
   const list = worries(mine);
-  $('advice').replaceChildren(captainCard(mine), worriesCard(list), transfersCard(mine, list));
+  const transfers = transfersCard(mine, list); // first, so each worry knows its suggested swap
+  $('advice').replaceChildren(captainCard(mine), worriesCard(list), transfers);
   markSelected();
 }
 
