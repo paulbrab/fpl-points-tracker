@@ -91,6 +91,7 @@ echo json_encode([
     'picks' => array_map(fn ($p) => [
         'id'      => (int) $p['element'],
         'captain' => (bool) $p['is_captain'],
+        'vice'    => (bool) $p['is_vice_captain'],
         'bench'   => $p['position'] > 11,
         'multiplier' => (int) $p['multiplier'],   // 0 = bench, 1 = playing, 2 = captain, 3 = triple captain
     ], $picks['picks'] ?? []),

@@ -452,6 +452,11 @@ function playerRow(p, pick = {}) {
   const who = el('span', 'who');
   const name = el('span', 'name', p.name);
   if (pick.captain) name.append(el('span', 'badge', 'C'));
+  if (pick.vice) {
+    const v = el('span', 'badge vice', 'V');
+    v.title = 'Vice-captain: gets double points if the captain doesn’t play';
+    name.append(v);
+  }
   const flag = statusFlag(p);
   if (flag) name.append(flag);
   who.append(name, el('span', 'team', `${p.team} · ${POS_SHORT[p.pos] ?? p.pos}`));

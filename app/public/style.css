@@ -429,3 +429,5 @@ h3.section:first-of-type { margin-top: 4px; }
 
 .team-note { margin: -4px 0 12px; }
 .btn:disabled { opacity: 0.6; cursor: wait; }
+
+.badge.vice { background: none; color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
