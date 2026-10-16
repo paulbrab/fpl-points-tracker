@@ -431,3 +431,55 @@ h3.section:first-of-type { margin-top: 4px; }
 .btn:disabled { opacity: 0.6; cursor: wait; }
 
 .badge.vice { background: none; color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+
+/* ---------- Phones and small tablets ---------- */
+
+.fx-row.phone-only, .phone-hint { display: none; }
+
+@media (max-width: 1000px) {
+  /* One column: chart, then the player list you tap, then the advice. */
+  .left { display: contents; }
+  .chart-panel { order: 1; }
+  .list-panel { order: 2; }
+  .picks-panel { order: 3; }
+}
+
+@media (max-width: 760px) {
+  /* Phone-sized table: name, price, points, form, run, with a mini fixture strip under the name. */
+  .table { min-width: 0; }
+  .table-head, .player-list li { grid-template-columns: 14px minmax(0, 1fr) repeat(4, 44px); }
+  .table-head .wide, .player-list .wide { display: none; }
+  .fx-row.phone-only { display: flex; }
+  .player-list li { height: 52px; }
+}
+
+@media (max-width: 600px) {
+  .topbar { flex-wrap: wrap; gap: 2px 12px; }
+  .brand { white-space: nowrap; }
+  .panel-head { flex-wrap: wrap; row-gap: 8px; }
+  .tab { white-space: nowrap; padding: 6px 8px; }
+  .head-actions { flex-wrap: wrap; }
+  .team-head { flex-wrap: wrap; }
+
+  /* Advice cards: one per row. */
+  #advice, #league-advice, #chip-advice { grid-template-columns: 1fr; row-gap: 20px; }
+  .picks { row-gap: 20px; }
+  .pick p { min-height: 0; }
+
+  /* Team numbers: three per row. */
+  .team-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; }
+  .team-stats .stat:nth-child(4) { padding-left: 0; border-left: 0; }
+
+  /* Big numbers wrap instead of being cut off. */
+  .stats .value { white-space: normal; font-size: 15px; }
+
+  /* League table: tighter number columns so names and chip tags fit. */
+  .league-head, .league-list li { grid-template-columns: 30px minmax(0, 1fr) 30px 40px 40px; gap: 6px; padding: 0 4px; }
+  .league-list li { height: auto; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+
+  .phone-hint { display: inline; }
+
+  .chip-grid { grid-template-columns: 44px repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .chip { padding: 5px 6px; font-size: 11px; }
+  .chip-grid .head { font-size: 10px; }
+}

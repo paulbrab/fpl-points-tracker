@@ -101,11 +101,11 @@ function fixtureChips(p, mini = false) {
 
 // Each column: what it shows, how to sort it, and a plain-English explanation.
 const COLUMNS = [
-  { key: 'cost',     label: 'Price',  show: (p) => (p.cost ? `£${fixed(p.cost)}` : '–'),
+  { key: 'cost', phone: true,     label: 'Price',  show: (p) => (p.cost ? `£${fixed(p.cost)}` : '–'),
     help: 'What the player costs right now, in millions.' },
-  { key: 'total',    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
+  { key: 'total', phone: true,    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
     help: 'Total points this season.' },
-  { key: 'form',     label: 'Form',   show: (p) => p.form,
+  { key: 'form', phone: true,     label: 'Form',   show: (p) => p.form,
     help: () => `Points in the last ${formWeeks} gameweeks. Shows who is hot right now. Change this in the My team tab.` },
   { key: 'predNext', label: 'Next',   show: (p) => fixed(p.predNext),
     help: "FPL's own guess at how many points they'll score next gameweek." },
@@ -117,7 +117,7 @@ const COLUMNS = [
     help: 'Share of all possible minutes they have played. Low means they might be on the bench.' },
   { key: 'own',      label: 'Owned',  show: (p) => `${fixed(p.own)}%`,
     help: 'Percentage of all FPL teams that own this player. Low = a "differential" that can help you catch up.' },
-  { key: 'run',      label: 'Run',    show: (p) => fixed(p.run), dir: 1,
+  { key: 'run', phone: true,      label: 'Run',    show: (p) => fixed(p.run), dir: 1,
     help: "How hard their next 5 games are: 1 = very easy, 5 = very hard. Attackers are judged on how good the opponent's defence is, defenders on the opponent's attack." },
   { key: null,       label: 'Next 5 games', show: (p) => fixtureChips(p), cls: 'fx-cell',
     help: 'Upcoming opponents. CAPITALS = home game, small letters = away. Green = easy, red = hard. Hover for details.' },
@@ -430,6 +430,7 @@ function drawHead(id, sortable) {
     const canSort = sortable && col.key;
     const cell = canSort ? el('button', sort.key === col.key ? 'sorted' : '', col.label) : el('span', '', col.label);
     cell.title = text(col.help);
+    cell.classList.toggle('wide', !col.phone); // hidden on phones
     if (canSort) {
       if (sort.key === col.key) cell.textContent += sort.dir < 0 ? ' ↓' : ' ↑';
       cell.onclick = () => {
@@ -459,12 +460,17 @@ function playerRow(p, pick = {}) {
   }
   const flag = statusFlag(p);
   if (flag) name.append(flag);
-  who.append(name, el('span', 'team', `${p.team} · ${POS_SHORT[p.pos] ?? p.pos}`));
+  // On phones the "Next 5 games" column is hidden, so show a mini fixture strip under the name instead.
+  const strip = fixtureChips(p, true);
+  strip.classList.add('phone-only');
+  who.append(name, el('span', 'team', `${p.team} · ${POS_SHORT[p.pos] ?? p.pos}`), strip);
 
   li.append(el('span', 'check'), who);
   for (const col of COLUMNS) {
     const value = col.show(p);
-    li.append(value instanceof Node ? value : el('span', col.cls ?? 'num', value));
+    const cell = value instanceof Node ? value : el('span', col.cls ?? 'num', value);
+    cell.classList.toggle('wide', !col.phone); // hidden on phones
+    li.append(cell);
   }
   li.onclick = () => toggle(p.id);
   return li;
