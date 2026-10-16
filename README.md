@@ -1,5 +1,7 @@
 # FPL Points Tracker
 
+[![Checks](https://github.com/paulbrab/fpl-points-tracker/actions/workflows/checks.yml/badge.svg)](https://github.com/paulbrab/fpl-points-tracker/actions/workflows/checks.yml)
+
 A web page to help you pick transfers and beat your Fantasy Premier League mini league. It runs on your own computer, and everyone at home can use it.
 
 - Compare players on a chart: season totals or points per gameweek.
@@ -183,6 +185,10 @@ Run it yourself: `python3 tools/backtest_projections.py FPL-Elo-Insights/data`
 | `tools/backtest_fixtures.py` | Tests the fixture difficulty model against past seasons |
 | `tools/backtest_projections.py` | Tests the points projections (used by the chip planner) against last season |
 | `FPL-Elo-Insights/` | The player data ([FPL-Core-Insights](https://github.com/olbauday/FPL-Core-Insights), linked as a git submodule) |
+
+## Contributing
+
+Ideas and fixes are welcome. Every push and pull request runs automatic checks (`.github/workflows/checks.yml`): PHP and JavaScript syntax, a quick start-up test of the app, and both backtests. The backtests fail if the fixture model stops beating "know nothing" or the projections stop beating FPL's own predictions on 2025/26, so changes to the maths need to keep them passing.
 
 ## Credits
 
