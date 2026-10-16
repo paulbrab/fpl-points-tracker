@@ -1,0 +1,5 @@
+[submodule "FPL-Elo-Insights"]
+	path = FPL-Elo-Insights
+	url = https://github.com/olbauday/FPL-Elo-Insights.git
+	branch = main
+	shallow = true
