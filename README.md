@@ -106,6 +106,18 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 
 **Fixture colours:** green = easy, red = hard. CAPITALS = home game, small letters = away.
 
+**Price arrows:** ▲ next to a price means lots of managers are buying that player this gameweek, so the price may rise soon (▲▲ = a lot). ▼ / ▼▼ is the same for selling. Hover an arrow for the numbers. FPL keeps its exact price rule secret, so these are odds, not promises. On 2025/26, measured weekly:
+
+| Net buying this week (share of owners) | Price rose the next week | Price fell the next week |
+|---|---|---|
+| Normal (−5% to +5%) | 1% | 3% |
+| ▲ (+5% to +20%) | 13% | 0% |
+| ▲▲ (+20% or more) | 22–26% | 1% |
+| ▼ (−5% to −20%) | 0% | 15% |
+| ▼▼ (−20% or more) | 1% | 31–47% |
+
+Prices change daily, so weekly data understates how quickly they move. Owned players with ▼▼ also appear under *Worries*. Transfer numbers come live from the FPL website (refreshed every 30 minutes).
+
 **Projected points** (used by the chip planner) take each player's usual points rate (80% season average, 20% recent form) and scale it by each fixture: attackers by the goals their team is expected to score, defenders and keepers by their clean-sheet chances. Double gameweeks add both games. They assume you keep your current squad. See [How we know the projections work](#how-we-know-the-projections-work).
 
 ## How fixture difficulty works
@@ -166,6 +178,8 @@ Run it yourself: `python3 tools/backtest_projections.py FPL-Elo-Insights/data`
 | `app/public/api/team.php` | A squad, bank and leagues from the FPL website |
 | `app/public/api/league.php` | League standings and every rival's squad |
 | `app/public/api/teams.php` | Saves the team list |
+| `app/public/api/prices.php` | Live transfer numbers for the price arrows |
+| `app/public/api/data-info.php` | How old your player data is, and whether newer data exists |
 | `tools/backtest_fixtures.py` | Tests the fixture difficulty model against past seasons |
 | `tools/backtest_projections.py` | Tests the points projections (used by the chip planner) against last season |
 | `FPL-Elo-Insights/` | The player data ([FPL-Core-Insights](https://github.com/olbauday/FPL-Core-Insights), linked as a git submodule) |

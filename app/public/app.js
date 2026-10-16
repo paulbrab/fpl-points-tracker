@@ -18,6 +18,7 @@ let league = null;         // loaded mini league: standings + everyone's picks
 let rival = null;          // entry ID of one rival to compare against, or null for everyone
 let tab = 'all';
 let dataInfo = null;       // which data version is in use and whether newer data exists (api/data-info.php)
+let prices = null;         // live transfer numbers from FPL for the price watch (api/prices.php)
 let freshLeague = false;   // next league load should skip the server's 10-minute cache (Refresh button)
 let formWeeks = DEFAULT_FORM_WEEKS; // how many recent gameweeks count as "form"; saved per team
 let savedTeams = [];       // [{ name, id, formWeeks }] shared by everyone in the house
@@ -102,8 +103,8 @@ function fixtureChips(p, mini = false) {
 
 // Each column: what it shows, how to sort it, and a plain-English explanation.
 const COLUMNS = [
-  { key: 'cost', phone: true,     label: 'Price',  show: (p) => (p.cost ? `£${fixed(p.cost)}` : '–'),
-    help: 'What the player costs right now, in millions.' },
+  { key: 'cost', phone: true,     label: 'Price',  show: priceCell,
+    help: 'What the player costs right now, in millions. ▲ / ▼ = lots of managers are buying / selling, so the price may change soon (▲▲ / ▼▼ = a lot). Hover an arrow for details.' },
   { key: 'total', phone: true,    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
     help: 'Total points this season.' },
   { key: 'form', phone: true,     label: 'Form',   show: (p) => p.form,
@@ -123,6 +124,48 @@ const COLUMNS = [
   { key: null,       label: 'Next 5 games', show: (p) => fixtureChips(p), cls: 'fx-cell',
     help: 'Upcoming opponents. CAPITALS = home game, small letters = away. Green = easy, red = hard. Hover for details.' },
 ];
+
+// ---------- Price watch ----------
+
+// Last season (2025/26), how often a player's price moved the following week, by how heavily they
+// were bought or sold that week (net transfers as a share of their owners). Normally: 1 in 100 rose, 3 in 100 fell.
+const PRICE_ODDS = [
+  { min: 0.2, arrow: '▲▲', cls: 'up', odds: 'about 1 in 4 times', move: 'rose' },
+  { min: 0.05, arrow: '▲', cls: 'up', odds: 'about 1 in 8 times', move: 'rose' },
+  { max: -0.2, arrow: '▼▼', cls: 'down', odds: 'about 1 in 3 times', move: 'fell' },
+  { max: -0.05, arrow: '▼', cls: 'down', odds: 'about 1 in 7 times', move: 'fell' },
+];
+
+// Net buying this gameweek as a share of the player's owners (very low ownership counts as 0.1%).
+function applyPrices() {
+  if (!prices) return;
+  for (const p of players.values()) {
+    const live = prices.players[p.id];
+    if (!live) continue;
+    const owners = Math.max(live.own / 100, 0.001) * prices.totalManagers;
+    p.netBuys = live.in - live.out;
+    p.buysIn = live.in;
+    p.buysOut = live.out;
+    p.pressure = p.netBuys / owners;
+    p.priceChangeThisGw = live.changeThisGw;
+    p.priceOdds = PRICE_ODDS.find((o) => (o.min != null ? p.pressure >= o.min : p.pressure <= o.max)) ?? null;
+  }
+}
+
+function priceCell(p) {
+  const cell = el('span', 'num', p.cost ? `£${fixed(p.cost)}` : '–');
+  const o = p.priceOdds;
+  if (!o) return cell;
+  const fmt = (n) => n.toLocaleString();
+  const share = `${p.pressure > 0 ? '+' : ''}${Math.round(p.pressure * 100)}% of owners`;
+  const moved = p.priceChangeThisGw ? ` Price already ${p.priceChangeThisGw > 0 ? 'up' : 'down'} £${fixed(Math.abs(p.priceChangeThisGw))}m since the deadline.` : '';
+  const arrow = el('span', `price-arrow ${o.cls}`, o.arrow);
+  arrow.title = `${fmt(p.buysIn)} managers bought and ${fmt(p.buysOut)} sold this gameweek (net ${share}).${moved}\n`
+    + `Last season, players ${o.cls === 'up' ? 'bought' : 'sold'} this heavily ${o.move} the following week ${o.odds}. `
+    + 'FPL keeps its exact rule secret, so this is a guide, not a promise.';
+  cell.append(arrow);
+  return cell;
+}
 
 // Small coloured tag for players who are injured, doubtful, suspended or gone.
 function statusFlag(p) {
@@ -638,6 +681,7 @@ function worries(mine) {
     const alt = p.available ? cheaperAndBetter(p) : null;
     if (alt) { why.push(`${alt.name} scored ${alt.form - p.form} more (£${fixed(alt.cost)}m)`); level += 1; }
     if (p.run >= 3.8) { why.push('Hard games next'); level += 1; }
+    if (p.pressure <= -0.2) { why.push('Price likely to drop'); level += 0.5; }
     if (level) list.push({ ...m, why, alt, level: m.bench ? level / 2 : level });
   }
   return list.sort((a, b) => b.level - a.level);
@@ -905,6 +949,20 @@ async function copyText(text) {
     area.remove();
     return ok;
   }
+}
+
+async function loadPrices() {
+  try {
+    const res = await fetch('api/prices.php');
+    if (!res.ok) return; // no arrows if FPL can't be reached
+    prices = await res.json();
+  } catch {
+    return;
+  }
+  applyPrices();
+  drawAllList();
+  drawTeamList();
+  showTab(tab);
 }
 
 async function loadDataInfo() {
@@ -1502,6 +1560,7 @@ async function init() {
 
   initSavedTeams();
   loadDataInfo();
+  loadPrices();
   $('copy-cmd').addEventListener('click', async () => {
     $('copy-cmd').textContent = (await copyText(UPDATE_COMMAND)) ? 'Copied!' : 'Select and copy it';
   });

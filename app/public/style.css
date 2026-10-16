@@ -207,7 +207,7 @@ input:focus, select:focus { border-color: var(--axis); }
 
 .table-head, .player-list li {
   display: grid;
-  grid-template-columns: 14px minmax(110px, 1fr) repeat(9, 40px) 150px;
+  grid-template-columns: 14px minmax(110px, 1fr) 56px repeat(8, 40px) 150px;
   gap: 6px;
   align-items: center;
   padding: 0 8px;
@@ -447,7 +447,7 @@ h3.section:first-of-type { margin-top: 4px; }
 @media (max-width: 760px) {
   /* Phone-sized table: name, price, points, form, run, with a mini fixture strip under the name. */
   .table { min-width: 0; }
-  .table-head, .player-list li { grid-template-columns: 14px minmax(0, 1fr) repeat(4, 44px); }
+  .table-head, .player-list li { grid-template-columns: 14px minmax(0, 1fr) 58px repeat(3, 44px); }
   .table-head .wide, .player-list .wide { display: none; }
   .fx-row.phone-only { display: flex; }
   .player-list li { height: 52px; }
@@ -510,3 +510,9 @@ h3.section:first-of-type { margin-top: 4px; }
   flex: 1; min-width: 0; padding: 7px 10px; border-radius: 6px; background: var(--surface-2); color: var(--text);
   font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: all; overflow-x: auto; white-space: nowrap;
 }
+
+/* ---------- Price watch arrows ---------- */
+
+.price-arrow { margin-left: 3px; font-size: 10px; letter-spacing: -1px; cursor: help; }
+.price-arrow.up { color: var(--good); }
+.price-arrow.down { color: var(--bad-text); }
