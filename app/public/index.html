@@ -14,6 +14,14 @@
   <header class="topbar">
     <div class="brand"><span class="logo">FPL</span> Points Tracker</div>
     <div class="sub" id="season-info">Loading…</div>
+    <div class="popover" id="data-pop" hidden role="dialog" aria-label="Get the latest data">
+      <p id="data-pop-text"></p>
+      <div class="copy-row">
+        <code id="data-pop-cmd"></code>
+        <button type="button" class="btn small" id="copy-cmd">Copy</button>
+      </div>
+      <p class="msg">Then refresh this page.</p>
+    </div>
   </header>
 
   <main class="layout">

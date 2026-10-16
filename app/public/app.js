@@ -860,15 +860,50 @@ async function initSavedTeams() {
 
 // Top bar: season, how old the data is (with a warning when newer data exists), and the form window.
 const UPDATE_COMMAND = 'git submodule update --remote --depth 1';
+const shortDate = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
 function drawSeasonInfo() {
   const box = $('season-info');
-  const when = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const made = dataInfo?.local?.date ? `Data from ${when(dataInfo.local.date)}` : `Data up to GW${gameweeks}`;
+  const made = dataInfo?.local?.date ? `Data from ${shortDate(dataInfo.local.date)}` : `Data up to GW${gameweeks}`;
   box.replaceChildren(`Season ${season} · ${made} · Form = last ${formWeeks} GWs`);
   if (dataInfo?.behind) {
-    const flag = el('span', 'flag warn', 'Newer data available');
-    flag.title = `New player data was published ${when(dataInfo.latest.date)}. To get it, run this in the project folder:\n${UPDATE_COMMAND}`;
+    const flag = el('button', 'flag warn flag-btn', 'Newer data available');
+    flag.type = 'button';
+    flag.title = 'Click for how to get it';
+    flag.onclick = (e) => {
+      e.stopPropagation();
+      toggleDataPop();
+    };
     box.append(' ', flag);
+  }
+}
+
+// Little box under the top bar: when the new data came out, and the command to copy.
+function toggleDataPop(show = $('data-pop').hidden) {
+  $('data-pop').hidden = !show;
+  if (!show) return;
+  $('data-pop-text').textContent = `New player data was published ${shortDate(dataInfo.latest.date)}. To get it, run this in the project folder:`;
+  $('data-pop-cmd').textContent = UPDATE_COMMAND;
+  $('copy-cmd').textContent = 'Copy';
+}
+
+// Copy text. The modern way only works on https or localhost, so fall back to the old way
+// (e.g. when the app is opened from another device on the home network).
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = el('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
   }
 }
 
@@ -1467,6 +1502,15 @@ async function init() {
 
   initSavedTeams();
   loadDataInfo();
+  $('copy-cmd').addEventListener('click', async () => {
+    $('copy-cmd').textContent = (await copyText(UPDATE_COMMAND)) ? 'Copied!' : 'Select and copy it';
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('data-pop').hidden && !$('data-pop').contains(e.target)) toggleDataPop(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') toggleDataPop(false);
+  });
 }
 
 init().catch((e) => {

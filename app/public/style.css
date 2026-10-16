@@ -492,3 +492,21 @@ h3.section:first-of-type { margin-top: 4px; }
   .chart-wrap { min-height: 300px; }
   .list-panel { max-height: calc(100vh - 24px); position: sticky; top: 12px; }
 }
+
+/* ---------- "Newer data available" box ---------- */
+
+.topbar { position: relative; }
+.flag-btn { border: 0; cursor: pointer; font: inherit; font-size: 10px; font-weight: 600; }
+.flag-btn:hover { text-decoration: underline; }
+.popover {
+  position: absolute; top: calc(100% + 6px); right: 12px; z-index: 10; width: min(420px, calc(100vw - 24px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 14px; font-size: 12.5px; color: var(--text-2);
+}
+.popover p { margin: 0 0 8px; }
+.popover .msg { margin: 8px 0 0; }
+.copy-row { display: flex; gap: 8px; align-items: center; }
+.copy-row code {
+  flex: 1; min-width: 0; padding: 7px 10px; border-radius: 6px; background: var(--surface-2); color: var(--text);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: all; overflow-x: auto; white-space: nowrap;
+}
