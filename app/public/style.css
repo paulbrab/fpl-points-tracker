@@ -80,7 +80,7 @@ h2 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 12px;
 }
 .left { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
@@ -200,13 +200,13 @@ input:focus, select:focus { border-color: var(--axis); }
 
 .list-panel { min-width: 0; }
 .table-scroll { flex: 1; min-height: 0; overflow-x: auto; display: flex; flex-direction: column; }
-.table { min-width: 660px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.table { min-width: 720px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tab-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .table-head, .player-list li {
   display: grid;
-  grid-template-columns: 14px minmax(130px, 1fr) repeat(9, 44px);
-  gap: 8px;
+  grid-template-columns: 14px minmax(110px, 1fr) repeat(9, 40px) 150px;
+  gap: 6px;
   align-items: center;
   padding: 0 8px;
 }
@@ -221,6 +221,7 @@ input:focus, select:focus { border-color: var(--axis); }
 .table-head button:hover { color: var(--text); }
 .table-head button.sorted { color: var(--text); font-weight: 600; }
 .table-head > :nth-child(n+3) { text-align: right; }
+.table-head > :last-child { text-align: left; padding-left: 6px; }
 .player-list .num, .player-list .pos { text-align: right; }
 
 .player-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; min-height: 0; }
@@ -297,3 +298,35 @@ li.on .check { border-color: var(--c); }
 #saved-teams li span:first-child { font-weight: 500; flex: 1; }
 #saved-teams button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
 #saved-teams button:hover { color: var(--text); }
+
+/* ---------- Fixture difficulty chips ---------- */
+
+:root {
+  --d1: #1f8a3c; --d1-text: #ffffff;
+  --d2: #a8dcb6; --d2-text: #0b3d1a;
+  --d3: #e6e5df; --d3-text: #52514e;
+  --d4: #f5b8b8; --d4-text: #5c1414;
+  --d5: #c63a3a; --d5-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --d1: #2e9e4f; --d1-text: #ffffff;
+    --d2: #23503a; --d2-text: #bfe8cc;
+    --d3: #383835; --d3-text: #c3c2b7;
+    --d4: #5c2a2a; --d4-text: #f5c4c4;
+    --d5: #d04848; --d5-text: #ffffff;
+  }
+}
+.fx-row { display: flex; gap: 2px; padding-left: 6px; }
+.fx {
+  width: 28px; height: 20px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em;
+}
+.fx.d1 { background: var(--d1); color: var(--d1-text); }
+.fx.d2 { background: var(--d2); color: var(--d2-text); }
+.fx.d3 { background: var(--d3); color: var(--d3-text); }
+.fx.d4 { background: var(--d4); color: var(--d4-text); }
+.fx.d5 { background: var(--d5); color: var(--d5-text); }
+.fx-row.mini { padding: 3px 0 1px; }
+.fx-row.mini .fx { width: 14px; height: 6px; border-radius: 2px; }

@@ -6,6 +6,7 @@ const POS_ORDER = { Goalkeeper: 1, Defender: 2, Midfielder: 3, Forward: 4 };
 const FORM_WEEKS = 4;
 
 let players = new Map();   // id -> player
+let fixtures = {};         // team short name -> next few fixtures, each with a 1-5 difficulty
 let gameweeks = 0;
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
@@ -39,12 +40,28 @@ function addStats(p) {
   p.unlucky = (p.xgi ?? 0) - ((p.goals ?? 0) + (p.assists ?? 0));
   p.available = !['i', 's', 'u'].includes(p.status);
   p.posOrder = POS_ORDER[p.pos] ?? 9;
+  // Defenders and keepers care about goals conceded; everyone else about goals scored.
+  const side = p.posOrder <= 2 ? 'def' : 'att';
+  p.fixtures = (fixtures[p.team] ?? []).map((f) => ({ ...f, diff: f[side] }));
+  p.run = p.fixtures.length ? p.fixtures.reduce((sum, f) => sum + f.diff, 0) / p.fixtures.length : null;
+}
+
+const DIFF_WORDS = ['', 'Very easy', 'Easy', 'Medium', 'Hard', 'Very hard'];
+
+// Coloured opponent chips. CAPITALS = home game, small letters = away.
+function fixtureChips(p, mini = false) {
+  const wrap = el('span', mini ? 'fx-row mini' : 'fx-row');
+  for (const f of p.fixtures.slice(0, 5)) {
+    const label = f.home ? f.opp : f.opp.toLowerCase();
+    const chip = el('span', `fx d${f.diff}`, mini ? '' : label);
+    chip.title = `GW${f.gw}: ${f.oppName} (${f.home ? 'home' : 'away'}) · ${DIFF_WORDS[f.diff]}`;
+    wrap.append(chip);
+  }
+  return wrap;
 }
 
 // Each column: what it shows, how to sort it, and a plain-English explanation.
 const COLUMNS = [
-  { key: 'posOrder', label: 'Pos',    show: (p) => POS_SHORT[p.pos] ?? p.pos, cls: 'pos', dir: 1,
-    help: 'Position: goalkeeper, defender, midfielder or forward.' },
   { key: 'cost',     label: 'Price',  show: (p) => (p.cost ? `£${fixed(p.cost)}` : '–'),
     help: 'What the player costs right now, in millions.' },
   { key: 'total',    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
@@ -61,6 +78,10 @@ const COLUMNS = [
     help: 'Share of all possible minutes they have played. Low means they might be on the bench.' },
   { key: 'own',      label: 'Owned',  show: (p) => `${fixed(p.own)}%`,
     help: 'Percentage of all FPL teams that own this player. Low = a "differential" that can help you catch up.' },
+  { key: 'run',      label: 'Run',    show: (p) => fixed(p.run), dir: 1,
+    help: 'How hard their next 5 games are: 1 = very easy, 5 = very hard. Attackers are judged on goals their team should score, defenders on goals they should let in.' },
+  { key: null,       label: 'Next 5 games', show: (p) => fixtureChips(p), cls: 'fx-cell',
+    help: 'Upcoming opponents. CAPITALS = home game, small letters = away. Green = easy, red = hard. Hover for details.' },
 ];
 
 // Small coloured tag for players who are injured, doubtful, suspended or gone.
@@ -277,9 +298,10 @@ function passesFilters(p, withSearch = true) {
 function drawHead(id, sortable) {
   const cells = [el('span'), el('span', '', 'Player')];
   for (const col of COLUMNS) {
-    const cell = sortable ? el('button', sort.key === col.key ? 'sorted' : '', col.label) : el('span', '', col.label);
+    const canSort = sortable && col.key;
+    const cell = canSort ? el('button', sort.key === col.key ? 'sorted' : '', col.label) : el('span', '', col.label);
     cell.title = col.help;
-    if (sortable) {
+    if (canSort) {
       if (sort.key === col.key) cell.textContent += sort.dir < 0 ? ' ↓' : ' ↑';
       cell.onclick = () => {
         const dir = sort.key === col.key ? -sort.dir : (col.dir ?? -1);
@@ -303,10 +325,13 @@ function playerRow(p, pick = {}) {
   if (pick.captain) name.append(el('span', 'badge', 'C'));
   const flag = statusFlag(p);
   if (flag) name.append(flag);
-  who.append(name, el('span', 'team', p.team));
+  who.append(name, el('span', 'team', `${p.team} · ${POS_SHORT[p.pos] ?? p.pos}`));
 
   li.append(el('span', 'check'), who);
-  for (const col of COLUMNS) li.append(el('span', col.cls ?? 'num', col.show(p)));
+  for (const col of COLUMNS) {
+    const value = col.show(p);
+    li.append(value instanceof Node ? value : el('span', col.cls ?? 'num', value));
+  }
   li.onclick = () => toggle(p.id);
   return li;
 }
@@ -345,10 +370,12 @@ function drawKey() {
 
 const PICKS = [
   {
-    title: 'In form',
-    help: `Most points in the last ${FORM_WEEKS} gameweeks.`,
-    rank: (p) => p.form,
+    title: 'Hot + easy games',
+    help: `In form (last ${FORM_WEEKS} GWs) with easy games coming up.`,
+    keep: (p) => p.run != null,
+    rank: (p) => p.form * (3 / p.run),
     show: (p) => `${p.form} pts`,
+    sub: (p) => fixtureChips(p, true),
   },
   {
     title: 'Best value',
@@ -387,7 +414,8 @@ function drawPicks() {
       const li = el('li');
       li.dataset.id = p.id;
       const nm = el('span', 'nm');
-      nm.append(el('b', '', p.name), el('small', '', pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`));
+      const sub = pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`;
+      nm.append(el('b', '', p.name), sub instanceof Node ? sub : el('small', '', sub));
       li.append(el('span', 'dot'), nm, el('span', 'v', pick.show(p)));
       li.onclick = () => toggle(p.id);
       ol.append(li);
@@ -513,9 +541,10 @@ function chartTeam() {
 async function init() {
   buildChart();
 
-  const res = await fetch('api/players.php');
+  const [res, fxRes] = await Promise.all([fetch('api/players.php'), fetch('api/fixtures.php')]);
   if (!res.ok) throw new Error(`server returned ${res.status}`);
   const data = await res.json();
+  fixtures = fxRes.ok ? (await fxRes.json()).teams : {};
   gameweeks = data.gameweeks;
   players = new Map(data.players.map((p) => [p.id, p]));
   players.forEach(addStats);
