@@ -7,6 +7,12 @@ A web page to help you pick transfers and beat your Fantasy Premier League mini 
 - Get advice for your team: who to captain, who's a worry, and transfers you can afford.
 - See how you stack up in your mini league: a league race chart, who your rivals own that you don't, and who they're captaining.
 
+![All players: compare players on the chart, sort by form, value and fixtures, with quick picks underneath](docs/screenshot-players.png)
+
+![My team: captain pick, worries and transfer ideas for an example squad. Clicking a worry compares both players on the chart.](docs/screenshot-team.png)
+
+*Screenshots use a made-up example team.*
+
 ## Getting started
 
 You need **[Git](https://git-scm.com/downloads)** and **[Docker](https://docs.docker.com/get-docker/)** (Docker Desktop on Windows or Mac).
@@ -14,7 +20,7 @@ You need **[Git](https://git-scm.com/downloads)** and **[Docker](https://docs.do
 **1. Download the app and its data**
 
 ```sh
-git clone --recurse-submodules https://github.com/<your-account>/fpl-points-tracker.git
+git clone --recurse-submodules https://github.com/paulbrab/fpl-points-tracker.git
 cd fpl-points-tracker
 ```
 
