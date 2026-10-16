@@ -1,3 +1,4 @@
 app/storage/
 app/.env
 __pycache__/
+.serena/
