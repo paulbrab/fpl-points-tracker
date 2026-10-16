@@ -26,22 +26,27 @@ function fetchJson(string $url): ?array
     return json_decode($body, true);
 }
 
-// This season's chips and the gameweeks each can be played in. Rarely changes, so cached for a day.
-function chipRules(string $base): array
+// This season's chips (and the gameweeks each can be played in) and every gameweek's deadline.
+// Rarely changes, so cached for a day.
+function seasonInfo(string $base): array
 {
-    $file = __DIR__ . '/../../storage/cache/chip-rules.json';
+    $file = __DIR__ . '/../../storage/cache/season-info.json';
     if (is_file($file) && time() - filemtime($file) < 86400) {
         return json_decode((string) file_get_contents($file), true) ?: [];
     }
-    $rules = array_map(fn ($c) => [
-        'name'  => $c['name'],
-        'start' => (int) $c['start_event'],
-        'stop'  => (int) $c['stop_event'],
-    ], fetchJson("$base/bootstrap-static/")['chips'] ?? []);
-    if ($rules && (is_dir(dirname($file)) || @mkdir(dirname($file), 0775, true))) {
-        file_put_contents($file, json_encode($rules), LOCK_EX);
+    $boot = fetchJson("$base/bootstrap-static/") ?? [];
+    $info = [
+        'chips' => array_map(fn ($c) => [
+            'name'  => $c['name'],
+            'start' => (int) $c['start_event'],
+            'stop'  => (int) $c['stop_event'],
+        ], $boot['chips'] ?? []),
+        'deadlines' => array_column(array_map(fn ($e) => [(int) $e['id'], $e['deadline_time']], $boot['events'] ?? []), 1, 0),
+    ];
+    if ($info['chips'] && (is_dir(dirname($file)) || @mkdir(dirname($file), 0775, true))) {
+        file_put_contents($file, json_encode($info), LOCK_EX);
     }
-    return $rules;
+    return $info;
 }
 
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -64,6 +69,7 @@ if (!$picks) {
 
 $history = $picks['entry_history'] ?? [];
 $past = fetchJson("$base/entry/$id/history/") ?? [];
+$season = seasonInfo($base);
 
 echo json_encode([
     'name'  => $entry['name'] ?? "Team $id",
@@ -73,9 +79,11 @@ echo json_encode([
     'gwPoints'    => $history['points'] ?? null,
     'totalPoints' => $entry['summary_overall_points'] ?? null,
     'rank'        => $entry['summary_overall_rank'] ?? null,
-    // Private classic leagues only (type 'x'); the rest are public ones like "Overall".
     'chipsUsed' => array_map(fn ($c) => ['name' => $c['name'], 'gw' => (int) $c['event']], $past['chips'] ?? []),
-    'chipRules' => chipRules($base),
+    'chipRules' => $season['chips'] ?? [],
+    // FPL keeps changes for the next gameweek private until this deadline passes.
+    'nextDeadline' => $season['deadlines'][$gw + 1] ?? null,
+    // Private classic leagues only (type 'x'); the rest are public ones like "Overall".
     'leagues' => array_values(array_map(
         fn ($l) => ['id' => (int) $l['id'], 'name' => $l['name'], 'rank' => $l['entry_rank'] ?? null, 'size' => $l['rank_count'] ?? null],
         array_filter($entry['leagues']['classic'] ?? [], fn ($l) => ($l['league_type'] ?? '') === 'x'),

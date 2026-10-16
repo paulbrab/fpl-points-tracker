@@ -91,7 +91,7 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 | Tab | What it shows |
 |---|---|
 | All players | Every player. Click a column name to sort. Filter by position and price. Hover a column name, or open "What do the columns mean?", for an explanation. |
-| My team | Pick a team from the dropdown. Shows the squad, bench, money in the bank, overall rank and predicted points. "Form" can be set per team (default: last 5 gameweeks). |
+| My team | Pick a team from the dropdown. Shows the squad, bench, money in the bank, overall rank and predicted points. "Form" can be set per team (default: last 5 gameweeks). **↻ Refresh** reloads it from the FPL website. Note: FPL keeps transfers and captain changes private until the gameweek deadline, so changes you've just made show up after the deadline. |
 | My league | Standings for one of your private leagues, with each team's chips still to play (WC, FH, BB, TC; crossed out = used). Click a rival to compare against just them. |
 | Chips | Which chips you've used and which are left (you get two sets: one for GW1–19, one for GW20–38). A planner shows the best week for Bench Boost and Triple Captain, and flags blank and double gameweeks. |
 

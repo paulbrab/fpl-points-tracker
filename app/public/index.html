@@ -141,8 +141,12 @@
 
             <div class="team-head">
               <p class="msg" id="team-msg">Add your teams with "Edit teams" to get started.</p>
-              <button type="button" class="btn ghost small" id="chart-team" hidden title="Replace the chart with the 8 highest scorers in your starting XI">Chart my top 8</button>
+              <div class="head-actions">
+                <button type="button" class="btn ghost small" id="refresh-team" hidden title="Reload this team (and its league) from the FPL website">↻ Refresh</button>
+                <button type="button" class="btn ghost small" id="chart-team" hidden title="Replace the chart with the 8 highest scorers in your starting XI">Chart my top 8</button>
+              </div>
             </div>
+            <p class="msg team-note" id="team-note" hidden></p>
             <div class="stats team-stats" id="team-stats" hidden></div>
             <div class="table-head" id="team-head"></div>
             <ul class="player-list" id="team-list"></ul>

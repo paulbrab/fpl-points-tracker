@@ -57,7 +57,9 @@ if (!$id || !$gw) {
 }
 
 $cacheFile = CACHE_DIR . "/league-v2-$id-$gw.json";
-if (is_file($cacheFile) && time() - filemtime($cacheFile) < CACHE_SECONDS) {
+// ?fresh=1 (the Refresh button) skips the cache, but never more than once a minute.
+$maxAge = filter_input(INPUT_GET, 'fresh', FILTER_VALIDATE_BOOL) ? 60 : CACHE_SECONDS;
+if (is_file($cacheFile) && time() - filemtime($cacheFile) < $maxAge) {
     readfile($cacheFile);
     exit;
 }

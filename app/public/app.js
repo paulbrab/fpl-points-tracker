@@ -17,6 +17,7 @@ let team = null;           // loaded team details: name, bank, rank...
 let league = null;         // loaded mini league: standings + everyone's picks
 let rival = null;          // entry ID of one rival to compare against, or null for everyone
 let tab = 'all';
+let freshLeague = false;   // next league load should skip the server's 10-minute cache (Refresh button)
 let formWeeks = DEFAULT_FORM_WEEKS; // how many recent gameweeks count as "form"; saved per team
 let savedTeams = [];       // [{ name, id, formWeeks }] shared by everyone in the house
 let view = 'total';        // 'total' = running totals, 'gw' = points per gameweek bars, 'avg' = vs league average (league only)
@@ -776,6 +777,7 @@ async function loadTeam(id) {
     msg.className = 'msg team-name';
     msg.textContent = `${data.name} · GW${data.gw} picks`;
     $('chart-team').hidden = false;
+    $('refresh-team').hidden = false;
     try { localStorage.setItem('fplTeamId', id); } catch {}
   } catch (e) {
     teamPicks = [];
@@ -783,6 +785,7 @@ async function loadTeam(id) {
     msg.textContent = e.message;
     $('chart-team').hidden = true;
   }
+  drawDeadlineNote();
   drawTeamList();
   drawTeamStats();
   setFormWeeks(formWeeks);
@@ -1139,12 +1142,37 @@ function fillLeagues() {
   $('league-msg').textContent = msg;
 }
 
+// FPL keeps transfers and captain changes private until the gameweek deadline, so explain
+// why changes made on the FPL site don't show yet, and when they will.
+function drawDeadlineNote() {
+  const note = $('team-note');
+  const deadline = team?.nextDeadline ? new Date(team.nextDeadline) : null;
+  note.hidden = !deadline || deadline < new Date();
+  if (note.hidden) return;
+  const when = deadline.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  note.textContent = `Showing your GW${team.gw} team. Changes you make for GW${team.gw + 1} (transfers, captain) appear here after the deadline: ${when}.`;
+}
+
+// Reload the team, and its league without the server's cache.
+async function refreshTeam() {
+  const btn = $('refresh-team');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+  freshLeague = true;
+  await loadTeam($('team-pick').value);
+  btn.disabled = false;
+  btn.textContent = '↻ Refresh';
+  btn.title = `Updated ${new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}. Reload this team (and its league) from the FPL website.`;
+}
+
 async function loadLeague() {
   const id = $('league-pick').value;
   if (!team || !Number(id)) return drawLeague();
   $('league-msg').textContent = 'Loading everyone’s teams…';
   try {
-    const res = await fetch(`api/league.php?id=${encodeURIComponent(id)}&gw=${team.gw}`);
+    const fresh = freshLeague ? '&fresh=1' : '';
+    freshLeague = false;
+    const res = await fetch(`api/league.php?id=${encodeURIComponent(id)}&gw=${team.gw}${fresh}`);
     const data = await res.json();
     if ($('league-pick').value !== id) return; // a different league was chosen while this one loaded
     if (!res.ok) throw new Error(data.error || 'Could not load league.');
@@ -1374,6 +1402,7 @@ async function init() {
   for (const t of document.querySelectorAll('.tab[data-tab]')) t.addEventListener('click', () => showTab(t.dataset.tab));
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);
+  $('refresh-team').addEventListener('click', refreshTeam);
   $('clear-chart').addEventListener('click', () => compare([]));
   $('league-pick').addEventListener('change', loadLeague);
   $('form-weeks').addEventListener('change', () => {
