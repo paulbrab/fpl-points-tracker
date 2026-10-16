@@ -112,6 +112,14 @@
           <div class="tab-body" id="tab-team" hidden>
             <div class="filters">
               <select id="team-pick" aria-label="Choose a team"></select>
+              <select id="form-weeks" aria-label="Form window" title="How many recent gameweeks count as form. Saved for this team.">
+                <option value="3">Form: last 3 GWs</option>
+                <option value="4">Form: last 4 GWs</option>
+                <option value="5" selected>Form: last 5 GWs</option>
+                <option value="6">Form: last 6 GWs</option>
+                <option value="8">Form: last 8 GWs</option>
+                <option value="10">Form: last 10 GWs</option>
+              </select>
               <button type="button" class="btn ghost" id="edit-teams">Edit teams</button>
             </div>
 

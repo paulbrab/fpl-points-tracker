@@ -3,7 +3,7 @@
 const MAX_ON_CHART = 8;
 const POS_SHORT = { Goalkeeper: 'GK', Defender: 'DEF', Midfielder: 'MID', Forward: 'FWD' };
 const POS_ORDER = { Goalkeeper: 1, Defender: 2, Midfielder: 3, Forward: 4 };
-const FORM_WEEKS = 4;
+const DEFAULT_FORM_WEEKS = 5;
 
 let players = new Map();   // id -> player
 let fixtures = {};         // team short name -> next few fixtures, each with a 1-5 difficulty
@@ -14,7 +14,8 @@ let team = null;           // loaded team details: name, bank, rank...
 let league = null;         // loaded mini league: standings + everyone's picks
 let rival = null;          // entry ID of one rival to compare against, or null for everyone
 let tab = 'all';
-let savedTeams = [];       // [{ name, id }] shared by everyone in the house
+let formWeeks = DEFAULT_FORM_WEEKS; // how many recent gameweeks count as "form"; saved per team
+let savedTeams = [];       // [{ name, id, formWeeks }] shared by everyone in the house
 let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
 let sort = { key: 'total', dir: -1 };
 let chart;
@@ -28,6 +29,7 @@ const el = (tag, className, text) => {
   return node;
 };
 const fixed = (n, d = 1) => (n == null ? '–' : n.toFixed(d));
+const text = (v) => (typeof v === 'function' ? v() : v); // help text can depend on settings
 
 // ---------- Player stats ----------
 
@@ -36,7 +38,7 @@ function addStats(p) {
   const pts = p.points;
   const total = pts.at(-1) ?? 0;
   p.total = total;
-  p.form = total - (pts[pts.length - 1 - FORM_WEEKS] ?? 0);
+  p.form = total - (pts[pts.length - 1 - formWeeks] ?? 0);
   p.value = p.cost ? total / p.cost : 0;
   p.minutes ??= 0;
   p.minsPct = gameweeks ? Math.min(100, (p.minutes / (gameweeks * 90)) * 100) : 0;
@@ -71,7 +73,7 @@ const COLUMNS = [
   { key: 'total',    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
     help: 'Total points this season.' },
   { key: 'form',     label: 'Form',   show: (p) => p.form,
-    help: `Points in the last ${FORM_WEEKS} gameweeks. Shows who is hot right now.` },
+    help: () => `Points in the last ${formWeeks} gameweeks. Shows who is hot right now. Change this in the My team tab.` },
   { key: 'predNext', label: 'Next',   show: (p) => fixed(p.predNext),
     help: "FPL's own guess at how many points they'll score next gameweek." },
   { key: 'value',    label: 'Value',  show: (p) => fixed(p.value),
@@ -304,7 +306,7 @@ function drawHead(id, sortable) {
   for (const col of COLUMNS) {
     const canSort = sortable && col.key;
     const cell = canSort ? el('button', sort.key === col.key ? 'sorted' : '', col.label) : el('span', '', col.label);
-    cell.title = col.help;
+    cell.title = text(col.help);
     if (canSort) {
       if (sort.key === col.key) cell.textContent += sort.dir < 0 ? ' ↓' : ' ↑';
       cell.onclick = () => {
@@ -366,7 +368,7 @@ function drawTeamList() {
 }
 
 function drawKey() {
-  const items = COLUMNS.flatMap((c) => [el('dt', '', c.label), el('dd', '', c.help)]);
+  const items = COLUMNS.flatMap((c) => [el('dt', '', c.label), el('dd', '', text(c.help))]);
   $('key-list').replaceChildren(...items);
 }
 
@@ -375,7 +377,7 @@ function drawKey() {
 const PICKS = [
   {
     title: 'Hot + easy games',
-    help: `In form (last ${FORM_WEEKS} GWs) with easy games coming up.`,
+    help: () => `In form (last ${formWeeks} GWs) with easy games coming up.`,
     keep: (p) => p.run != null,
     rank: (p) => p.form * (3 / p.run),
     show: (p) => `${p.form} pts`,
@@ -435,7 +437,7 @@ function drawPicks() {
       sub: pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`,
       value: pick.show(p),
     }));
-    return pickCard(pick.title, pick.help, items);
+    return pickCard(pick.title, text(pick.help), items);
   });
   $('picks').replaceChildren(...cards);
 
@@ -475,6 +477,17 @@ function captainCard(mine) {
   return pickCard('Captain', 'Who to give the armband. Uses predicted points and how easy the next game is.', items);
 }
 
+// A same-price-or-cheaper player (up to £1m less) who has scored at least 1 point a week more.
+// Players in the top third of their position for form are left alone - they're doing their job.
+function cheaperAndBetter(p) {
+  const regular = [...players.values()].filter((q) => q.pos === p.pos && q.available && q.minsPct >= 50);
+  if (regular.filter((q) => q.form > p.form).length < regular.length / 3) return null;
+  const alt = regular
+    .filter((q) => q.id !== p.id && q.cost <= p.cost && q.cost >= p.cost - 1)
+    .sort((a, b) => b.form - a.form)[0];
+  return alt && alt.form - p.form >= formWeeks ? alt : null;
+}
+
 // Players who might cost you points, with the reasons in plain words.
 function worries(mine) {
   const list = [];
@@ -486,7 +499,9 @@ function worries(mine) {
     if (['i', 's', 'u'].includes(p.status)) { why.push({ i: 'Injured', s: 'Suspended', u: 'Not available' }[p.status]); level += 3; }
     if (p.status === 'd') { why.push(p.chance != null ? `${p.chance}% chance to play` : 'Doubtful'); level += 2; }
     if (p.available && gameweeks >= 3 && p.minsPct < 50) { why.push('Not playing much'); level += 1.5; }
-    if (p.available && p.form <= FORM_WEEKS * 1.5) { why.push(`Only ${p.form} pts in ${FORM_WEEKS} GWs`); level += 1; }
+    if (p.available && p.form <= formWeeks * 1.5) { why.push(`Only ${p.form} pts in ${formWeeks} GWs`); level += 1; }
+    const alt = p.available ? cheaperAndBetter(p) : null;
+    if (alt) { why.push(`${alt.name} scored ${alt.form - p.form} more (£${fixed(alt.cost)}m)`); level += 1; }
     if (p.run >= 3.8) { why.push('Hard games next'); level += 1; }
     if (level) list.push({ ...m, why, level: m.bench ? level / 2 : level });
   }
@@ -520,7 +535,7 @@ function transfersCard(mine, list) {
     items.push({
       p: best,
       name: `${out.name} → ${best.name}`,
-      sub: `${best.team} · £${fixed(best.cost)}m · ${best.form} pts last ${FORM_WEEKS} GWs`,
+      sub: `${best.team} · £${fixed(best.cost)}m · ${best.form} pts last ${formWeeks} GWs`,
       value: `${best.form} pts`,
       onClick: () => compare([out.id, best.id]),
     });
@@ -618,6 +633,9 @@ async function loadTeam(id) {
     if (!res.ok) throw new Error(data.error || 'Could not load team.');
     teamPicks = data.picks;
     team = { ...data, id: Number(id) };
+    formWeeks = savedFormWeeks(id);
+    $('form-weeks').value = formWeeks;
+    players.forEach(addStats);
     msg.className = 'msg team-name';
     msg.textContent = `${data.name} · GW${data.gw} picks`;
     $('chart-team').hidden = false;
@@ -630,6 +648,7 @@ async function loadTeam(id) {
   }
   drawTeamList();
   drawTeamStats();
+  setFormWeeks(formWeeks);
   league = null;
   rival = null;
   fillLeagues();
@@ -685,6 +704,25 @@ async function initSavedTeams() {
   if (savedTeams.some((t) => String(t.id) === last)) $('team-pick').value = last;
   if (!savedTeams.length) $('team-editor').hidden = false;
   else loadTeam($('team-pick').value);
+}
+
+// Change the form window and redraw everything that uses form.
+function setFormWeeks(n) {
+  formWeeks = n;
+  $('form-weeks').value = n;
+  players.forEach(addStats);
+  $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
+  drawKey();
+  drawHead('all-head', true);
+  drawHead('team-head', false);
+  drawAllList();
+  drawTeamList();
+  showTab(tab);
+}
+
+// The chosen team's saved form window (or the default).
+function savedFormWeeks(id) {
+  return savedTeams.find((t) => String(t.id) === String(id))?.formWeeks ?? DEFAULT_FORM_WEEKS;
 }
 
 // ---------- Mini league ----------
@@ -878,7 +916,7 @@ async function init() {
   gameweeks = data.gameweeks;
   players = new Map(data.players.map((p) => [p.id, p]));
   players.forEach(addStats);
-  $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · ${players.size} players`;
+  $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
 
   drawKey();
   drawHead('all-head', true);
@@ -895,6 +933,14 @@ async function init() {
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);
   $('league-pick').addEventListener('change', loadLeague);
+  $('form-weeks').addEventListener('change', () => {
+    const n = Number($('form-weeks').value);
+    setFormWeeks(n);
+    const id = $('team-pick').value;
+    if (savedTeams.some((t) => String(t.id) === id)) {
+      saveTeams(savedTeams.map((t) => (String(t.id) === id ? { ...t, formWeeks: n } : t))).catch((e) => alert(e.message));
+    }
+  });
   $('team-pick').addEventListener('change', () => loadTeam($('team-pick').value));
   $('edit-teams').addEventListener('click', () => { $('team-editor').hidden = !$('team-editor').hidden; });
   $('add-team').addEventListener('submit', async (e) => {

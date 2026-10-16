@@ -37,7 +37,9 @@ foreach ($input as $t) {
     if ($name === '' || mb_strlen($name) > 30 || $id === false) {
         fail(400, 'Each team needs a name (up to 30 letters) and a number ID.');
     }
-    $teams[] = ['name' => $name, 'id' => $id];
+    // How many recent gameweeks count as "form" for this team (optional, 1-10, default 5).
+    $form = filter_var($t['formWeeks'] ?? 5, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10]]);
+    $teams[] = ['name' => $name, 'id' => $id, 'formWeeks' => $form === false ? 5 : $form];
 }
 
 if (!is_dir(dirname(FILE)) && !mkdir(dirname(FILE), 0775, true)) {
