@@ -147,6 +147,7 @@ def main():
     print(f'Season replayed: {SEASON} (GW{FIRST_GW}-38), regular players only (played half the minutes so far)\n')
     print(f"{'model':46} {'next week':>22} {'4 weeks ahead':>22}")
     print(f"{'':46} {'error':>8} {'correlation':>12}   {'error':>8} {'correlation':>12}")
+    results = {}
     for name, opts in models.items():
         cols = []
         for ahead in (0, 3):
@@ -170,6 +171,7 @@ def main():
         for c in cols:
             line += f' {c[0]:8.2f} {c[1]:12.2f}  ' if c else f" {'-':>8} {'-':>12}  "
         print(line)
+        results[name] = cols[0]
 
     # 3: does the planner's best week really score more? (what Triple Captain relies on)
     # Only normal single-game weeks count, so blank and double gameweeks can't flatter the result.
@@ -198,6 +200,18 @@ def main():
     print(f'  Picked week vs an average week: {sum(gains) / len(gains):+.2f} pts '
           f'(90% range {boots[100]:+.2f} to {boots[1900]:+.2f}, {len(gains)} picks)')
     print(f'  Picked (easiest) week vs hardest week: {sum(spreads) / len(spreads):+.2f} pts')
+
+    # Guards for automated checks: last season's data never changes, so these only fail if the maths breaks.
+    app, fpl = results['App: 80% season / 20% form, with fixtures'], results["FPL's own prediction (next week only)"]
+    problems = []
+    if not (app[0] < fpl[0] and app[1] > fpl[1]):
+        problems.append("projections no longer beat FPL's own prediction")
+    if boots[100] <= 0:
+        problems.append("the planner's best week is no longer clearly better than an average week")
+    if problems:
+        print('\nFAIL: ' + '; '.join(problems) + f' ({SEASON}).')
+        sys.exit(1)
+    print(f'\nOK: projections beat FPL\'s own prediction and the best-week pick helps ({SEASON}).')
 
 if __name__ == '__main__':
     main()

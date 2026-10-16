@@ -1,0 +1,53 @@
+# Runs on every push to main and every pull request, so changes can't quietly break the app.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Get the code and the player data
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: PHP syntax (same PHP version as the app)
+        run: docker run --rm -v "$PWD/app:/app" -w /app php:8.4-cli-alpine sh -c 'for f in public/api/*.php; do php -l "$f" || exit 1; done'
+
+      - name: JavaScript syntax
+        run: node --check app/public/app.js
+
+      - name: Start the app and check the player data and fixtures load
+        working-directory: app
+        run: |
+          docker compose up -d
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/ > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:8080/api/players.php | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          assert len(d['players']) > 500, 'too few players'
+          print(len(d['players']), 'players, data up to GW', d['gameweeks'])"
+          curl -sf 'http://localhost:8080/api/fixtures.php?weeks=38' | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          assert 'teams' in d and 'nextGw' in d, 'unexpected fixtures response'
+          print('fixtures for', len(d['teams']), 'teams, next gameweek', d['nextGw'])"
+
+      - name: Show the app's log (only if something above failed)
+        if: failure()
+        working-directory: app
+        run: docker compose logs
+
+      - name: Fixture difficulty backtest
+        run: python3 -I tools/backtest_fixtures.py FPL-Elo-Insights/data
+
+      - name: Points projection backtest
+        run: python3 -I tools/backtest_projections.py FPL-Elo-Insights/data

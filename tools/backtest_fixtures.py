@@ -134,6 +134,13 @@ def main():
         boots = [sum(random.choices(per_match, k=len(per_match))) for _ in range(5000)]
         print(f'  {season}: better in {sum(b > 0 for b in boots) / len(boots):.0%} of resamples ({len(per_match)} matches)')
 
+    # Guard for automated checks: last season's data never changes, so this only fails if the maths breaks.
+    base_err, chosen_err = scored[0][0], scored[2][0]
+    if chosen_err >= base_err:
+        print(f'\nFAIL: the chosen model ({chosen_err:.4f}) no longer beats the baseline ({base_err:.4f}) on {SEASONS[0][0]}.')
+        sys.exit(1)
+    print(f'\nOK: the chosen model beats the baseline on {SEASONS[0][0]}.')
+
 
 if __name__ == '__main__':
     main()
