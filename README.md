@@ -31,8 +31,23 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 Difficulty is about **the opponent** (like FPL's own ratings), worked out from expected goals (xG):
 
 - Attackers are rated on how good the opponent's **defence** is. Defenders and keepers are rated on how good the opponent's **attack** is. Home games are a bit easier.
-- Every team starts from **last season's** ratings, counted as if they'd already played 10 games. This season's matches gradually take over, so one freak result early on doesn't change much. Promoted teams start like last season's three weakest sides.
+- Ratings are **opponent-adjusted**: xG against a weak defence counts for less than xG against a strong one.
+- Every team starts from **last season's** ratings, pulled halfway back to average (squads change over the summer), and counted as if they'd already played 30 games. This season's matches gradually take over. Promoted teams start like last season's three weakest sides.
 - Games are split into fifths: 1 = easiest, 5 = hardest.
+
+### How we know it works
+
+`tools/backtest_fixtures.py` replays past seasons week by week. Before each gameweek it rates teams using only earlier matches, predicts each team's xG, and measures the error against what really happened.
+
+| Model | Error 2025/26 | Error 2026/27 so far |
+|---|---|---|
+| Know nothing (every team average) | 0.762 | 0.771 |
+| First version (not adjusted, light use of last season) | 0.722 | 0.809 |
+| **Current** | **0.711** | **0.767** |
+
+The current model was better in 98–99% of bootstrap resamples, in both seasons. Single matches are very noisy, so even a good model only gets about 7% closer than "know nothing". Weighting recent games more was tested and made predictions slightly worse, so it isn't used.
+
+Run it yourself: `python3 tools/backtest_fixtures.py FPL-Elo-Insights/data`
 
 ## Run it
 
@@ -71,3 +86,4 @@ Teams and leagues are fetched live from the FPL website. League data is cached f
 | `app/public/api/team.php` | A squad, bank and leagues from the FPL website |
 | `app/public/api/league.php` | League standings and every rival's squad |
 | `app/public/api/teams.php` | Saves the house team list |
+| `tools/backtest_fixtures.py` | Tests the fixture difficulty model against past seasons |

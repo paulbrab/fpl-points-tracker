@@ -2,10 +2,14 @@
 // Next few fixtures for every team, each with a 1 (easy) to 5 (hard) difficulty.
 //
 // How difficulty works:
-//  - Every team gets an attack rating (xG created per game) and a defence rating (xG conceded per game).
-//  - Teams start from last season's ratings, counted as if they'd already played PRIOR_GAMES games.
-//    This season's matches then gradually take over, so one freak result early on doesn't dominate.
-//    Promoted teams start like last season's three weakest sides.
+//  - Every team gets an attack rating (xG created) and a defence rating (xG conceded), 1.0 = average.
+//  - Ratings are opponent-adjusted: all teams are fitted together, so xG against a weak defence
+//    counts for less than xG against a strong one.
+//  - Teams start from last season's ratings, pulled PRIOR_SHRINK of the way back to average (squads
+//    change over the summer) and counted as if they'd already played PRIOR_GAMES games. This season's
+//    matches then gradually take over. Promoted teams start like last season's three weakest sides.
+//  - These settings were chosen by backtesting: replaying 2025/26 week by week and predicting each
+//    match's xG from earlier games only (see README). Weighting recent games more did not help.
 //  - Difficulty is about the OPPONENT only (like FPL's own ratings):
 //      attackers ('att') -> how good the opponent's defence is,
 //      defenders and keepers ('def') -> how good the opponent's attack is,
@@ -17,7 +21,9 @@ declare(strict_types=1);
 header('Content-Type: application/json');
 
 const WEEKS_AHEAD = 5;
-const PRIOR_GAMES = 10;  // how much last season counts, in games
+const PRIOR_GAMES = 30;    // how much last season counts, in games
+const PRIOR_SHRINK = 0.5;  // how much of last season's difference from average carries over
+const FIT_ROUNDS = 30;     // rounds of fitting; ratings settle well before this
 
 $season = basename(getenv('SEASON') ?: '2026-2027');
 [$y1, $y2] = array_map('intval', explode('-', $season));
@@ -56,39 +62,68 @@ function seasonFixtures(string $season, ?array &$upcoming = null): array
     return $played;
 }
 
-// Attack and defence ratings (1.0 = league average). $prior gives each team a head start worth $priorGames games.
-function rateTeams(array $played, array $prior = [], int $priorGames = 0): array
+// League scoring level and home advantage.
+function leagueLevels(array $played): array
 {
     $homeXg = array_sum(array_column($played, 2)) / count($played);
     $awayXg = array_sum(array_column($played, 3)) / count($played);
-    $avg = ($homeXg + $awayXg) / 2;
-    $homeBoost = sqrt($homeXg / $awayXg);
+    return [($homeXg + $awayXg) / 2, sqrt($homeXg / $awayXg)];
+}
 
-    $sum = [];
-    foreach ($prior as $code => $p) {
-        $sum[$code] = ['for' => $p['attack'] * $avg * $priorGames, 'against' => $p['defence'] * $avg * $priorGames, 'games' => $priorGames];
+// Opponent-adjusted attack and defence ratings (1.0 = average).
+// Model: a team's expected xG = league average x its attack x opponent's defence x home advantage.
+// Each round re-estimates every team given the others' current ratings. $prior gives each team
+// a head start worth $priorGames games against an average opponent.
+function rateTeams(array $played, float $avg, float $homeBoost, array $prior, int $priorGames): array
+{
+    $teams = array_keys($prior);
+    foreach ($played as [$h, $a]) {
+        $teams[] = $h;
+        $teams[] = $a;
     }
-    foreach ($played as [$h, $a, $hx, $ax]) {
-        foreach ([$h, $a] as $t) {
-            $sum[$t] ??= ['for' => 0, 'against' => 0, 'games' => 0];
+    $teams = array_unique($teams);
+    $att = $def = [];
+    foreach ($teams as $t) {
+        $att[$t] = $prior[$t]['attack'] ?? 1.0;
+        $def[$t] = $prior[$t]['defence'] ?? 1.0;
+    }
+
+    for ($round = 0; $round < FIT_ROUNDS; $round++) {
+        $num = $den = [];
+        foreach ($teams as $t) {
+            // Head start: $priorGames games against an average opponent at the prior rating.
+            // $num = xG actually [scored, conceded]; $den = xG an average team would have [scored, conceded].
+            $num[$t] = [$priorGames * $avg * ($prior[$t]['attack'] ?? 1.0), $priorGames * $avg * ($prior[$t]['defence'] ?? 1.0)];
+            $den[$t] = [$priorGames * $avg, $priorGames * $avg];
         }
-        // Remove home advantage so home and away games count the same.
-        $sum[$h]['for'] += $hx / $homeBoost;
-        $sum[$h]['against'] += $ax * $homeBoost;
-        $sum[$a]['for'] += $ax * $homeBoost;
-        $sum[$a]['against'] += $hx / $homeBoost;
-        $sum[$h]['games']++;
-        $sum[$a]['games']++;
+        foreach ($played as [$h, $a, $hx, $ax]) {
+            $num[$h][0] += $hx;
+            $den[$h][0] += $avg * $def[$a] * $homeBoost;
+            $num[$a][0] += $ax;
+            $den[$a][0] += $avg * $def[$h] / $homeBoost;
+            $num[$h][1] += $ax;
+            $den[$h][1] += $avg * $att[$a] / $homeBoost;
+            $num[$a][1] += $hx;
+            $den[$a][1] += $avg * $att[$h] * $homeBoost;
+        }
+        foreach ($teams as $t) {
+            $att[$t] = $den[$t][0] > 0 ? $num[$t][0] / $den[$t][0] : 1.0;
+            $def[$t] = $den[$t][1] > 0 ? $num[$t][1] / $den[$t][1] : 1.0;
+        }
+        // Keep the average team at exactly 1.0.
+        $meanAtt = array_sum($att) / count($att);
+        $meanDef = array_sum($def) / count($def);
+        foreach ($teams as $t) {
+            $att[$t] /= $meanAtt;
+            $def[$t] /= $meanDef;
+        }
     }
 
     $ratings = [];
-    foreach ($sum as $code => $s) {
-        $ratings[$code] = [
-            'attack'  => $s['for'] / $s['games'] / $avg,
-            'defence' => $s['against'] / $s['games'] / $avg,
-        ];
+    foreach ($teams as $t) {
+        $ratings[$t] = ['attack' => $att[$t], 'defence' => $def[$t]];
     }
-    return ['ratings' => $ratings, 'avg' => $avg, 'homeBoost' => $homeBoost];
+    return $ratings;
 }
 
 $teams = [];
@@ -104,11 +139,16 @@ if (!$upcoming) {
     exit;
 }
 
-// Starting point: last season. Promoted teams start like last season's three weakest sides.
-$prior = [];
+// Starting point: last season, pulled part of the way back to average.
+// Promoted teams start like last season's three weakest sides.
 $lastPlayed = seasonFixtures($lastSeason);
+$prior = [];
+foreach ($teams as $code => $_) {
+    $prior[$code] = ['attack' => 1.0, 'defence' => 1.0];
+}
 if ($lastPlayed) {
-    $last = rateTeams($lastPlayed)['ratings'];
+    [$lastAvg, $lastBoost] = leagueLevels($lastPlayed);
+    $last = rateTeams($lastPlayed, $lastAvg, $lastBoost, [], 0);
     uasort($last, fn ($a, $b) => ($a['attack'] - $a['defence']) <=> ($b['attack'] - $b['defence']));
     $weakest = array_slice($last, 0, 3);
     $promoted = [
@@ -116,26 +156,23 @@ if ($lastPlayed) {
         'defence' => array_sum(array_column($weakest, 'defence')) / 3,
     ];
     foreach ($teams as $code => $_) {
-        $prior[$code] = $last[$code] ?? $promoted;
-    }
-} else {
-    foreach ($teams as $code => $_) {
-        $prior[$code] = ['attack' => 1.0, 'defence' => 1.0];
+        $r = $last[$code] ?? $promoted;
+        $prior[$code] = [
+            'attack'  => 1 + ($r['attack'] - 1) * PRIOR_SHRINK,
+            'defence' => 1 + ($r['defence'] - 1) * PRIOR_SHRINK,
+        ];
     }
 }
 
-// This season's matches on top of the starting point.
-if ($played) {
-    $model = rateTeams($played, $prior, PRIOR_GAMES);
-} elseif ($lastPlayed) {
-    // Before a ball is kicked: last season's ratings as they are.
-    $model = rateTeams($lastPlayed);
-    $model['ratings'] = $prior;
-} else {
+if (!$played && !$lastPlayed) {
     echo json_encode(['nextGw' => null, 'teams' => new stdClass()]);
     exit;
 }
-['ratings' => $rating, 'avg' => $avg, 'homeBoost' => $homeBoost] = $model;
+
+// Scoring level and home advantage from both seasons (steadier early on), then this season's matches
+// on top of the starting point.
+[$avg, $homeBoost] = leagueLevels(array_merge($lastPlayed, $played));
+$rating = $played ? rateTeams($played, $avg, $homeBoost, $prior, PRIOR_GAMES) : $prior;
 
 // Only the next few gameweeks.
 $nextGw = min(array_column($upcoming, 'gw'));
