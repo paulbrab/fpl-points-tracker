@@ -483,3 +483,12 @@ h3.section:first-of-type { margin-top: 4px; }
   .chip { padding: 5px 6px; font-size: 11px; }
   .chip-grid .head { font-size: 10px; }
 }
+
+/* ---------- Short screens (e.g. small laptops) ---------- */
+
+@media (max-height: 860px) and (min-width: 1001px) {
+  /* Let the page grow and scroll instead of squeezing the chart into a too-small box. */
+  .shell { height: auto; min-height: 100vh; }
+  .chart-wrap { min-height: 300px; }
+  .list-panel { max-height: calc(100vh - 24px); position: sticky; top: 12px; }
+}
