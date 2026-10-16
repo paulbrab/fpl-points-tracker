@@ -17,6 +17,7 @@ let team = null;           // loaded team details: name, bank, rank...
 let league = null;         // loaded mini league: standings + everyone's picks
 let rival = null;          // entry ID of one rival to compare against, or null for everyone
 let tab = 'all';
+let dataInfo = null;       // which data version is in use and whether newer data exists (api/data-info.php)
 let freshLeague = false;   // next league load should skip the server's 10-minute cache (Refresh button)
 let formWeeks = DEFAULT_FORM_WEEKS; // how many recent gameweeks count as "form"; saved per team
 let savedTeams = [];       // [{ name, id, formWeeks }] shared by everyone in the house
@@ -857,12 +858,36 @@ async function initSavedTeams() {
   else loadTeam($('team-pick').value);
 }
 
+// Top bar: season, how old the data is (with a warning when newer data exists), and the form window.
+const UPDATE_COMMAND = 'git submodule update --remote --depth 1';
+function drawSeasonInfo() {
+  const box = $('season-info');
+  const when = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const made = dataInfo?.local?.date ? `Data from ${when(dataInfo.local.date)}` : `Data up to GW${gameweeks}`;
+  box.replaceChildren(`Season ${season} · ${made} · Form = last ${formWeeks} GWs`);
+  if (dataInfo?.behind) {
+    const flag = el('span', 'flag warn', 'Newer data available');
+    flag.title = `New player data was published ${when(dataInfo.latest.date)}. To get it, run this in the project folder:\n${UPDATE_COMMAND}`;
+    box.append(' ', flag);
+  }
+}
+
+async function loadDataInfo() {
+  try {
+    const res = await fetch('api/data-info.php');
+    if (res.ok) dataInfo = await res.json();
+  } catch {
+    dataInfo = null; // offline: keep showing "Data up to GW…"
+  }
+  drawSeasonInfo();
+}
+
 // Change the form window and redraw everything that uses form.
 function setFormWeeks(n) {
   formWeeks = n;
   $('form-weeks').value = n;
   players.forEach(addStats);
-  $('season-info').textContent = `Season ${season} · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
+  drawSeasonInfo();
   drawKey();
   drawHead('all-head', true);
   drawHead('team-head', false);
@@ -1397,7 +1422,7 @@ async function init() {
   season = data.season;
   players = new Map(data.players.map((p) => [p.id, p]));
   players.forEach(addStats);
-  $('season-info').textContent = `Season ${season} · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
+  drawSeasonInfo();
 
   drawKey();
   drawHead('all-head', true);
@@ -1441,6 +1466,7 @@ async function init() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
   initSavedTeams();
+  loadDataInfo();
 }
 
 init().catch((e) => {

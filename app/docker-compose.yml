@@ -12,6 +12,8 @@ services:
     volumes:
       - ./:/app
       - ../FPL-Elo-Insights/data:/data:ro
+      # Read-only, so the app can tell which version of the data you have (see api/data-info.php).
+      - ..:/repo:ro
     environment:
       # Which season folder in FPL-Elo-Insights/data to use.
       SEASON: "${SEASON:-2026-2027}"
