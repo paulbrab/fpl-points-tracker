@@ -1,13 +1,17 @@
 services:
   app:
     image: php:8.4-cli-alpine
-    user: "1000:1000"
+    # Runs as your user so it can save teams to app/storage. Override with UID/GID if yours isn't 1000.
+    user: "${UID:-1000}:${GID:-1000}"
     working_dir: /app
     command: php -S 0.0.0.0:8000 -t public
     ports:
-      - "8080:8000"
+      # Default: only this computer. Set BIND=0.0.0.0 in app/.env to allow phones etc. on your home Wi-Fi.
+      # There's no login, so never expose it to the internet.
+      - "${BIND:-127.0.0.1}:${PORT:-8080}:8000"
     volumes:
       - ./:/app
       - ../FPL-Elo-Insights/data:/data:ro
     environment:
-      SEASON: "2026-2027"
+      # Which season folder in FPL-Elo-Insights/data to use.
+      SEASON: "${SEASON:-2026-2027}"

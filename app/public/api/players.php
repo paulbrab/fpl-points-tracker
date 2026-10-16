@@ -5,7 +5,8 @@ declare(strict_types=1);
 
 header('Content-Type: application/json');
 
-$dir = '/data/' . basename(getenv('SEASON') ?: '2026-2027');
+$season = basename(getenv('SEASON') ?: '2026-2027');
+$dir = "/data/$season";
 
 function readCsv(string $path): Generator
 {
@@ -90,4 +91,4 @@ unset($p);
 $list = array_values($players);
 usort($list, fn ($a, $b) => end($b['points']) <=> end($a['points']));
 
-echo json_encode(['gameweeks' => $maxGw, 'players' => $list]);
+echo json_encode(['season' => str_replace('-20', '/', $season), 'gameweeks' => $maxGw, 'players' => $list]);

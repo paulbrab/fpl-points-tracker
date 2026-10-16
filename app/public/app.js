@@ -8,6 +8,7 @@ const DEFAULT_FORM_WEEKS = 5;
 let players = new Map();   // id -> player
 let fixtures = {};         // team short name -> next few fixtures, each with a 1-5 difficulty
 let gameweeks = 0;
+let season = '';           // e.g. "2026/27", from the data
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
 let team = null;           // loaded team details: name, bank, rank...
@@ -811,7 +812,7 @@ function setFormWeeks(n) {
   formWeeks = n;
   $('form-weeks').value = n;
   players.forEach(addStats);
-  $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
+  $('season-info').textContent = `Season ${season} · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
   drawKey();
   drawHead('all-head', true);
   drawHead('team-head', false);
@@ -1023,9 +1024,10 @@ async function init() {
   const data = await res.json();
   fixtures = fxRes.ok ? (await fxRes.json()).teams : {};
   gameweeks = data.gameweeks;
+  season = data.season;
   players = new Map(data.players.map((p) => [p.id, p]));
   players.forEach(addStats);
-  $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
+  $('season-info').textContent = `Season ${season} · Data up to GW${gameweeks} · Form = last ${formWeeks} GWs`;
 
   drawKey();
   drawHead('all-head', true);
