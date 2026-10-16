@@ -54,9 +54,15 @@ echo json_encode([
     'gwPoints'    => $history['points'] ?? null,
     'totalPoints' => $entry['summary_overall_points'] ?? null,
     'rank'        => $entry['summary_overall_rank'] ?? null,
+    // Private classic leagues only (type 'x'); the rest are public ones like "Overall".
+    'leagues' => array_values(array_map(
+        fn ($l) => ['id' => (int) $l['id'], 'name' => $l['name'], 'rank' => $l['entry_rank'] ?? null, 'size' => $l['rank_count'] ?? null],
+        array_filter($entry['leagues']['classic'] ?? [], fn ($l) => ($l['league_type'] ?? '') === 'x'),
+    )),
     'picks' => array_map(fn ($p) => [
         'id'      => (int) $p['element'],
         'captain' => (bool) $p['is_captain'],
         'bench'   => $p['position'] > 11,
+        'multiplier' => (int) $p['multiplier'],   // 0 = bench, 1 = playing, 2 = captain, 3 = triple captain
     ], $picks['picks'] ?? []),
 ]);

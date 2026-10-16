@@ -11,6 +11,9 @@ let gameweeks = 0;
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
 let team = null;           // loaded team details: name, bank, rank...
+let league = null;         // loaded mini league: standings + everyone's picks
+let rival = null;          // entry ID of one rival to compare against, or null for everyone
+let tab = 'all';
 let savedTeams = [];       // [{ name, id }] shared by everyone in the house
 let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
 let sort = { key: 'total', dir: -1 };
@@ -554,6 +557,7 @@ function drawTeamStats() {
 }
 
 function drawAdvice() {
+  $('picks-pos').textContent = team ? `· ${team.name}` : '';
   if (!team) {
     const note = el('p', 'msg', 'Choose a team in the My team tab to see advice.');
     $('advice').replaceChildren(note);
@@ -581,24 +585,24 @@ function markSelected() {
 }
 
 function showTab(name) {
+  tab = name;
   for (const t of document.querySelectorAll('.tab[data-tab]')) {
     t.classList.toggle('active', t.dataset.tab === name);
     t.setAttribute('aria-selected', t.dataset.tab === name);
   }
-  $('tab-all').hidden = name !== 'all';
-  $('tab-team').hidden = name !== 'team';
+  for (const t of ['all', 'team', 'league']) $(`tab-${t}`).hidden = name !== t;
   $('list-filters').hidden = name !== 'all';
 
-  // The panel under the chart follows the tab: quick picks for all players, advice for my team.
-  const isTeam = name === 'team';
-  $('picks').hidden = isTeam;
-  $('advice').hidden = !isTeam;
-  $('picks-title').textContent = isTeam ? 'Team advice' : 'Quick picks';
-  if (isTeam) {
-    $('picks-pos').textContent = team ? `· ${team.name}` : '';
-    drawAdvice();
-  } else {
-    drawPicks();
+  // The panel under the chart follows the tab.
+  $('picks').hidden = name !== 'all';
+  $('advice').hidden = name !== 'team';
+  $('league-advice').hidden = name !== 'league';
+  $('picks-title').textContent = { all: 'Quick picks', team: 'Team advice', league: 'League advice' }[name];
+  if (name === 'all') drawPicks();
+  if (name === 'team') drawAdvice();
+  if (name === 'league') {
+    if (team && !league) loadLeague();
+    else drawLeague();
   }
 }
 
@@ -613,7 +617,7 @@ async function loadTeam(id) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not load team.');
     teamPicks = data.picks;
-    team = data;
+    team = { ...data, id: Number(id) };
     msg.className = 'msg team-name';
     msg.textContent = `${data.name} · GW${data.gw} picks`;
     $('chart-team').hidden = false;
@@ -626,7 +630,10 @@ async function loadTeam(id) {
   }
   drawTeamList();
   drawTeamStats();
-  if (!$('advice').hidden) showTab('team');
+  league = null;
+  rival = null;
+  fillLeagues();
+  showTab(tab);
 }
 
 // ---------- Saved household teams ----------
@@ -680,6 +687,174 @@ async function initSavedTeams() {
   else loadTeam($('team-pick').value);
 }
 
+// ---------- Mini league ----------
+
+function fillLeagues() {
+  const leagues = team?.leagues ?? [];
+  const options = leagues.map((l) => {
+    const o = el('option', '', `${l.name} (${l.size} teams)`);
+    o.value = l.id;
+    return o;
+  });
+  if (!leagues.length) options.push(el('option', '', team ? 'No private leagues' : 'No team chosen'));
+  $('league-pick').replaceChildren(...options);
+  // Start on the last league used, otherwise the smallest one with rivals in it (likely the family league).
+  let last = null;
+  try { last = localStorage.getItem('fplLeagueId'); } catch {}
+  const smallest = leagues.filter((l) => l.size > 1).sort((a, b) => a.size - b.size)[0];
+  if (leagues.some((l) => String(l.id) === last)) $('league-pick').value = last;
+  else if (smallest) $('league-pick').value = smallest.id;
+  if (!leagues.length) $('league-list').replaceChildren();
+  let msg = '';
+  if (!team) msg = 'Choose a team in the My team tab first.';
+  else if (!leagues.length) msg = 'This team is not in any private leagues.';
+  $('league-msg').textContent = msg;
+}
+
+async function loadLeague() {
+  const id = $('league-pick').value;
+  if (!team || !Number(id)) return drawLeague();
+  $('league-msg').textContent = 'Loading everyone’s teams…';
+  try {
+    const res = await fetch(`api/league.php?id=${encodeURIComponent(id)}&gw=${team.gw}`);
+    const data = await res.json();
+    if ($('league-pick').value !== id) return; // a different league was chosen while this one loaded
+    if (!res.ok) throw new Error(data.error || 'Could not load league.');
+    league = data;
+    rival = null;
+    try { localStorage.setItem('fplLeagueId', id); } catch {}
+    $('league-msg').textContent = data.more ? 'Big league: showing the top 50 only.' : '';
+  } catch (e) {
+    league = null;
+    $('league-msg').textContent = e.message;
+  }
+  drawLeague();
+}
+
+function drawLeague() {
+  drawStandings();
+  drawLeagueAdvice();
+}
+
+function drawStandings() {
+  if (!league) return $('league-list').replaceChildren();
+  const me = league.managers.find((m) => m.entry === team?.id);
+  const rows = league.managers.map((m) => {
+    const li = el('li');
+    const isMe = m === me;
+    li.classList.toggle('me', isMe);
+    li.classList.toggle('on', m.entry === rival);
+
+    const moved = m.lastRank ? m.lastRank - m.rank : 0;
+    const rank = el('span', 'rank', m.rank);
+    if (moved) rank.append(el('small', moved > 0 ? 'up' : 'down', moved > 0 ? '▲' : '▼'));
+
+    const who = el('span', 'who');
+    const name = el('span', 'name', m.team);
+    if (isMe) name.append(el('span', 'badge', 'You'));
+    if (m.chip) name.append(el('span', 'flag warn', m.chip.replace('3xc', 'triple captain').replace('bboost', 'bench boost')));
+    who.append(name, el('span', 'team', m.player));
+
+    const gap = me && !isMe ? m.total - me.total : null;
+    let gapText = '–';
+    if (gap != null) gapText = gap > 0 ? `+${gap}` : `${gap}`.replace('-', '−');
+    li.append(rank, who, el('span', 'num', m.gwPoints), el('span', 'num pts', m.total), el('span', 'num gap', gapText));
+
+    if (!isMe) {
+      li.title = 'Click to compare against just this team';
+      li.onclick = () => {
+        rival = rival === m.entry ? null : m.entry;
+        drawLeague();
+      };
+    }
+    return li;
+  });
+  $('league-list').replaceChildren(...rows);
+}
+
+// How many of the rivals have each player playing (not benched), and captained.
+function rivalOwnership(rivals) {
+  const stats = new Map();
+  for (const r of rivals) {
+    for (const pk of r.picks) {
+      if (!pk.multiplier) continue;
+      const s = stats.get(pk.id) ?? { owners: 0, caps: 0, eo: 0 };
+      s.owners++;
+      s.eo += pk.multiplier;
+      if (pk.multiplier >= 2) s.caps++;
+      stats.set(pk.id, s);
+    }
+  }
+  return stats;
+}
+
+function drawLeagueAdvice() {
+  const box = $('league-advice');
+  if (!team || !league) {
+    $('picks-pos').textContent = '';
+    box.replaceChildren(el('p', 'msg', team ? 'Choose a league to compare against your rivals.' : 'Choose a team in the My team tab first.'));
+    return;
+  }
+  const rivals = league.managers.filter((m) => m.entry !== team.id && (!rival || m.entry === rival));
+  const n = rivals.length;
+  const focus = rival ? rivals[0]?.team : null;
+  $('picks-pos').textContent = focus ? `· vs ${focus}` : `· vs ${n} rivals (GW${league.gw} teams)`;
+  if (!n) return box.replaceChildren(el('p', 'msg', 'No rivals in this league yet.'));
+
+  const stats = rivalOwnership(rivals);
+  const mine = new Map(teamPicks.map((pk) => [pk.id, pk.multiplier ?? (pk.bench ? 0 : 1)]));
+  const own = (id) => stats.get(id) ?? { owners: 0, caps: 0, eo: 0 };
+  const ownedText = (s) => {
+    if (n === 1) return s.owners ? 'they have them' : 'they don’t';
+    return `${s.owners}/${n} rivals`;
+  };
+
+  // Threats: rivals gain more than you when these players score.
+  const threats = [...stats.entries()]
+    .filter(([id]) => players.has(id))
+    .map(([id, s]) => ({ p: players.get(id), s, swing: s.eo / n - (mine.get(id) ?? 0) }))
+    .filter((t) => t.swing > 0)
+    .sort((a, b) => b.swing - a.swing || b.p.form - a.p.form)
+    .slice(0, 5)
+    .map((t) => ({
+      p: t.p,
+      sub: `${t.p.team} · ${ownedText(t.s)}${t.s.caps ? ` · ${t.s.caps} captained` : ''}`,
+      value: n === 1 ? (t.s.caps ? 'C' : '✓') : `${Math.round((t.s.owners / n) * 100)}%`,
+    }));
+
+  // Differentials: your playing players that few rivals have.
+  const diffs = teamPicks
+    .filter((pk) => (mine.get(pk.id) ?? 0) > 0 && players.has(pk.id))
+    .map((pk) => ({ p: players.get(pk.id), s: own(pk.id) }))
+    .sort((a, b) => a.s.owners - b.s.owners || b.p.form - a.p.form)
+    .slice(0, 5)
+    .map((d) => ({
+      p: d.p,
+      sub: `${d.p.team} · ${d.s.owners === 0 ? 'only you' : ownedText(d.s)}`,
+      value: n === 1 ? (d.s.owners ? '✓' : '—') : `${Math.round((d.s.owners / n) * 100)}%`,
+    }));
+
+  // Captain watch: who the rivals gave the armband to.
+  const caps = [...stats.entries()]
+    .filter(([id, s]) => s.caps && players.has(id))
+    .sort((a, b) => b[1].caps - a[1].caps)
+    .slice(0, 5)
+    .map(([id, s]) => {
+      const m = mine.get(id) ?? 0;
+      let yours = 'you don’t have them';
+      if (m >= 2) yours = 'your captain too';
+      else if (m === 1) yours = 'you have them (not C)';
+      return { p: players.get(id), sub: yours, value: n === 1 ? 'C' : `${s.caps} of ${n}` };
+    });
+
+  box.replaceChildren(
+    pickCard('Threats', 'Players your rivals have and you don’t. If they score, you fall behind.', threats, 'No threats. You have everything they have!'),
+    pickCard('Your differentials', 'Your players that few rivals have. When they score, you catch up.', diffs),
+    pickCard('Captain watch', 'Who your rivals made captain. Their points count double.', caps),
+  );
+  markSelected();
+}
+
 // Replace the chart with the highest scorers from the starting XI.
 function chartTeam() {
   const top = teamPicks
@@ -719,6 +894,7 @@ async function init() {
   for (const t of document.querySelectorAll('.tab[data-tab]')) t.addEventListener('click', () => showTab(t.dataset.tab));
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);
+  $('league-pick').addEventListener('change', loadLeague);
   $('team-pick').addEventListener('change', () => loadTeam($('team-pick').value));
   $('edit-teams').addEventListener('click', () => { $('team-editor').hidden = !$('team-editor').hidden; });
   $('add-team').addEventListener('submit', async (e) => {

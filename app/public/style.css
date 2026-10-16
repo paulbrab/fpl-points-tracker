@@ -14,6 +14,7 @@
   --shadow: 0 8px 24px rgba(11, 11, 11, 0.08), 0 1px 2px rgba(11, 11, 11, 0.06);
   --btn: #0b0b0b;
   --btn-text: #ffffff;
+  --good: #006300;
   --warn-bg: #fdf1d6; --warn-text: #7a5200;
   --bad-bg: #fbe3e3;  --bad-text: #a32626;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
@@ -35,6 +36,7 @@
     --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     --btn: #ffffff;
     --btn-text: #0b0b0b;
+    --good: #0ca30c;
     --warn-bg: #3a2f12; --warn-text: #fab219;
     --bad-bg: #3a1a1a;  --bad-text: #ef7b7b;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
@@ -335,8 +337,32 @@ li.on .check { border-color: var(--c); }
 
 .pick li.none { display: block; cursor: default; color: var(--muted); }
 .pick li.none:hover { background: none; }
-#advice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-#advice .pick:nth-child(3) { padding-right: 0; }
+#advice, #league-advice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#advice .pick:nth-child(3), #league-advice .pick:nth-child(3) { padding-right: 0; }
+#league-advice > .msg { grid-column: 1 / -1; }
 .team-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: 12px; margin-bottom: 8px; }
 .team-stats .value { font-size: 16px; }
 #advice > .msg { grid-column: 1 / -1; }
+
+/* ---------- Mini league ---------- */
+
+.league-msg { margin-bottom: 8px; }
+.league-msg:empty { display: none; }
+.league-head, .league-list li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 50px 60px 60px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px;
+}
+.league-head {
+  font-size: 11px; font-weight: 500; color: var(--muted);
+  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.league-head > :nth-child(n+3) { text-align: right; }
+.league-list li.me { background: var(--surface-2); cursor: default; }
+.league-list .rank { font-weight: 600; font-variant-numeric: tabular-nums; }
+.league-list .rank small { font-size: 9px; margin-left: 4px; vertical-align: 1px; }
+.league-list .up { color: var(--good); }
+.league-list .down { color: var(--bad-text); }
+.league-list .gap { color: var(--text-2); }

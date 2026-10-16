@@ -61,6 +61,7 @@
         </div>
         <div class="picks" id="picks"></div>
         <div class="picks" id="advice" hidden></div>
+        <div class="picks" id="league-advice" hidden></div>
       </section>
     </div>
 
@@ -70,6 +71,7 @@
         <div class="tabs" role="tablist">
           <button class="tab active" data-tab="all" role="tab">All players</button>
           <button class="tab" data-tab="team" role="tab">My team</button>
+          <button class="tab" data-tab="league" role="tab">My league</button>
         </div>
       </div>
 
@@ -130,6 +132,20 @@
             <div class="stats team-stats" id="team-stats" hidden></div>
             <div class="table-head" id="team-head"></div>
             <ul class="player-list" id="team-list"></ul>
+          </div>
+
+          <div class="tab-body" id="tab-league" hidden>
+            <div class="filters">
+              <select id="league-pick" aria-label="Choose a league"></select>
+            </div>
+            <p class="msg league-msg" id="league-msg">Choose a team in the My team tab first.</p>
+            <div class="league-head">
+              <span>#</span><span>Team</span>
+              <span title="Points scored in the latest gameweek">GW</span>
+              <span title="Total points this season">Total</span>
+              <span title="Points between them and you. +10 means they are 10 ahead of you, −10 means 10 behind.">Gap</span>
+            </div>
+            <ul class="player-list league-list" id="league-list"></ul>
           </div>
         </div>
       </div>
