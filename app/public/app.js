@@ -314,6 +314,7 @@ const CAPTIONS = {
 };
 
 function drawChart() {
+  if (tab === 'chips') return drawChipChart();
   const race = raceMode();
   if (!race && view === 'avg') view = 'total';
   for (const t of document.querySelectorAll('.tab[data-view]')) {
@@ -371,6 +372,7 @@ function drawLegend(series) {
 }
 
 function drawStats(series, race) {
+  $('stat-gw-label').textContent = 'Latest gameweek';
   $('stat-gw').textContent = gameweeks ? `GW${gameweeks}` : '–';
   if (race) {
     const leader = league?.managers[0];
@@ -736,20 +738,23 @@ function showTab(name) {
     t.classList.toggle('active', t.dataset.tab === name);
     t.setAttribute('aria-selected', t.dataset.tab === name);
   }
-  for (const t of ['all', 'team', 'league']) $(`tab-${t}`).hidden = name !== t;
+  for (const t of ['all', 'team', 'league', 'chips']) $(`tab-${t}`).hidden = name !== t;
   $('list-filters').hidden = name !== 'all';
+  document.querySelector('.key').hidden = !['all', 'team'].includes(name); // column help only where there are columns
 
   // The panel under the chart follows the tab.
   $('picks').hidden = name !== 'all';
   $('advice').hidden = name !== 'team';
   $('league-advice').hidden = name !== 'league';
-  $('picks-title').textContent = { all: 'Quick picks', team: 'Team advice', league: 'League advice' }[name];
+  $('chip-advice').hidden = name !== 'chips';
+  $('picks-title').textContent = { all: 'Quick picks', team: 'Team advice', league: 'League advice', chips: 'Chip advice' }[name];
   if (name === 'all') drawPicks();
   if (name === 'team') drawAdvice();
   if (name === 'league') {
     if (team && !league) loadLeague();
     else drawLeague();
   }
+  if (name === 'chips') drawChips();
   drawChart();
 }
 
@@ -855,6 +860,259 @@ function setFormWeeks(n) {
 // The chosen team's saved form window (or the default).
 function savedFormWeeks(id) {
   return savedTeams.find((t) => String(t.id) === String(id))?.formWeeks ?? DEFAULT_FORM_WEEKS;
+}
+
+// ---------- Chips ----------
+
+const CHIP_NAMES = { wildcard: 'Wildcard', freehit: 'Free Hit', bboost: 'Bench Boost', '3xc': 'Triple Captain' };
+const CHIP_ORDER = ['wildcard', 'freehit', 'bboost', '3xc'];
+const range = (from, to) => Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i);
+
+// Every chip this season with its gameweek window and state: used, available, later or expired.
+function chipStatus() {
+  const used = team?.chipsUsed ?? [];
+  return (team?.chipRules ?? []).map((r) => {
+    const use = used.find((u) => u.name === r.name && u.gw >= r.start && u.gw <= r.stop);
+    let state = 'later';
+    if (use) state = 'used';
+    else if (r.stop < nextGw) state = 'expired';
+    else if (r.start <= nextGw) state = 'available';
+    return { ...r, state, usedGw: use?.gw };
+  });
+}
+
+const chipReady = (name) => chipStatus().find((c) => c.name === name && c.state === 'available');
+
+// Chips can be planned from the next gameweek to the end of the current half (when they expire).
+function chipWindow() {
+  const current = chipStatus().filter((c) => c.start <= nextGw && c.stop >= nextGw);
+  const stop = current.length ? Math.max(...current.map((c) => c.stop)) : 38;
+  return range(nextGw, stop);
+}
+
+// For each gameweek: extra points from Bench Boost (your bench's projected points) and
+// Triple Captain (your best starter's projected points), plus how many starters have a game.
+function chipPlan() {
+  const mine = squad();
+  const xi = mine.filter((m) => !m.bench);
+  const bench = mine.filter((m) => m.bench);
+  return chipWindow().map((gw) => {
+    const best = xi.map((m) => ({ p: m.p, pts: projected(m.p, gw) })).sort((a, b) => b.pts - a.pts)[0];
+    return {
+      gw,
+      bb: bench.reduce((sum, m) => sum + projected(m.p, gw), 0),
+      tc: best?.pts ?? 0,
+      tcPlayer: best?.p,
+      playing: xi.filter((m) => m.p.fixtures.some((f) => f.gw === gw)).length,
+      doubles: xi.filter((m) => m.p.fixtures.filter((f) => f.gw === gw).length > 1).length,
+    };
+  });
+}
+
+const bestWeek = (plan, key) => plan.reduce((best, w) => (!best || w[key] > best[key] ? w : best), null);
+
+function drawChips() {
+  const ready = Boolean(team && nextGw);
+  $('chips-body').hidden = !ready;
+  $('chips-msg').textContent = ready ? `${team.name} · chips` : 'Choose a team in the My team tab first.';
+  if (!ready) {
+    $('chip-advice').replaceChildren(el('p', 'msg', 'Choose a team in the My team tab first.'));
+    $('picks-pos').textContent = '';
+    return;
+  }
+  $('picks-pos').textContent = `· ${team.name}`;
+  const plan = chipPlan();
+  drawChipGrid();
+  drawPlanner(plan);
+  drawChipAdvice(plan);
+}
+
+// Which chips are used, ready or still to come, for each half of the season.
+function drawChipGrid() {
+  const status = chipStatus();
+  const halves = [...new Set(status.map((c) => c.stop))].sort((a, b) => a - b);
+  const cells = [el('span'), ...CHIP_ORDER.map((n) => el('span', 'head', CHIP_NAMES[n]))];
+  for (const stop of halves) {
+    const inHalf = status.filter((c) => c.stop === stop);
+    const start = Math.min(...inHalf.map((c) => c.start));
+    cells.push(el('span', 'half', `GW${start}–${stop}`));
+    for (const name of CHIP_ORDER) {
+      const c = inHalf.find((x) => x.name === name);
+      const words = {
+        used: ['Used', `in GW${c?.usedGw}`],
+        available: ['Ready', `use by GW${c?.stop}`],
+        later: ['Later', `from GW${c?.start}`],
+        expired: ['Missed', `ended GW${c?.stop}`],
+      }[c?.state] ?? ['–', ''];
+      const chip = el('div', `chip ${c?.state ?? ''}`);
+      chip.append(el('b', '', words[0]), words[1]);
+      cells.push(chip);
+    }
+  }
+  $('chip-grid').replaceChildren(...cells);
+}
+
+function rowHead(label, sub) {
+  const th = el('th', 'row', label);
+  th.append(el('small', '', sub));
+  return th;
+}
+
+// One row of the planner: shaded by value (darker = more points), best week starred.
+function plannerRow(label, sub, plan, key, chip, tip) {
+  const tr = el('tr');
+  const ready = chipReady(chip);
+  if (!ready) tr.classList.add('done');
+  tr.append(rowHead(label, ready ? sub : 'not available now'));
+  const values = plan.map((w) => w[key]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const best = bestWeek(plan, key);
+  for (const w of plan) {
+    const share = max > min ? (w[key] - min) / (max - min) : 1;
+    const td = el('td', '', w === best ? `★${fixed(w[key], 0)}` : fixed(w[key], 0));
+    td.style.setProperty('--shade', `${Math.round(10 + share * 75)}%`);
+    td.classList.toggle('dark', share > 0.55);
+    td.classList.toggle('best', w === best);
+    td.title = tip(w);
+    tr.append(td);
+  }
+  return tr;
+}
+
+function drawPlanner(plan) {
+  $('planner-range').textContent = plan.length ? `· GW${plan[0].gw}–${plan.at(-1).gw}` : '';
+  const head = el('tr');
+  head.append(el('th'), ...plan.map((w) => el('th', '', `GW${w.gw}`)));
+
+  const playing = el('tr');
+  playing.append(rowHead('XI with a game', 'blank & double weeks'));
+  for (const w of plan) {
+    const td = el('td', w.playing < 11 || w.doubles ? 'warn' : 'plain', w.doubles ? `${w.playing}+${w.doubles}` : w.playing);
+    td.title = `GW${w.gw}: ${w.playing} of your starting XI have a game${w.doubles ? `, ${w.doubles} play twice` : ''}`;
+    playing.append(td);
+  }
+
+  $('planner').replaceChildren(
+    head,
+    plannerRow('Bench Boost', 'bench points', plan, 'bb', 'bboost', (w) => `GW${w.gw}: your bench should score about ${fixed(w.bb)} pts`),
+    plannerRow('Triple Captain', 'extra captain points', plan, 'tc', '3xc', (w) => `GW${w.gw}: ${w.tcPlayer?.name ?? '–'} should score about ${fixed(w.tc)} pts`),
+    playing,
+  );
+}
+
+function adviceCard(title, headline, detail, tag) {
+  const card = el('div', 'pick');
+  card.append(el('h3', '', title), el('p', 'advice-headline', headline), el('p', 'advice-detail', detail));
+  if (tag) card.append(el('span', 'flag warn advice-tag', tag));
+  return card;
+}
+
+// "Use it or lose it" when a chip runs out within 3 gameweeks.
+function urgency(chip) {
+  const c = chipReady(chip);
+  const left = c ? c.stop - nextGw + 1 : 99;
+  if (left > 3) return null;
+  return `Use it or lose it: ${left} week${left === 1 ? '' : 's'} left`;
+}
+
+function notReady(name) {
+  const later = chipStatus().find((c) => c.name === name && c.state === 'later');
+  return later ? `Next one from GW${later.start}` : 'None left this season';
+}
+
+function drawChipAdvice(plan) {
+  const cards = [];
+  const mine = squad();
+
+  const bb = bestWeek(plan, 'bb');
+  if (chipReady('bboost') && bb) {
+    const benchNames = mine.filter((m) => m.bench).map((m) => m.p.name).join(', ');
+    cards.push(adviceCard('Bench Boost', `GW${bb.gw} · +${fixed(bb.bb, 0)} pts`, `Your bench (${benchNames}) has its best week. Upgrade weak bench players first to get more from it.`, urgency('bboost')));
+  } else {
+    cards.push(adviceCard('Bench Boost', 'Not now', notReady('bboost')));
+  }
+
+  const tc = bestWeek(plan, 'tc');
+  if (chipReady('3xc') && tc?.tcPlayer) {
+    const f = tc.tcPlayer.fixtures.find((x) => x.gw === tc.gw);
+    const where = f ? `${f.home ? 'at home to' : 'away at'} ${f.oppName}` : '';
+    cards.push(adviceCard('Triple Captain', `GW${tc.gw} · ${tc.tcPlayer.name}`, `${tc.tcPlayer.name} ${where}, about ${fixed(tc.tc, 0)} pts. Triple Captain earns that again on top.`, urgency('3xc')));
+  } else {
+    cards.push(adviceCard('Triple Captain', 'Not now', notReady('3xc')));
+  }
+
+  if (chipReady('freehit')) {
+    const blank = plan.filter((w) => w.playing <= 8).sort((a, b) => a.playing - b.playing)[0];
+    const double = plan.filter((w) => w.doubles >= 3).sort((a, b) => b.doubles - a.doubles)[0];
+    let headline = 'Save it';
+    let detail = 'No blank or double gameweeks yet. Free Hit is best when lots of your players have no game, or lots of others play twice.';
+    if (blank) [headline, detail] = [`GW${blank.gw}`, `Only ${blank.playing} of your starting XI have a game that week.`];
+    else if (double) [headline, detail] = [`GW${double.gw}`, `A double gameweek: pick a team full of players who play twice.`];
+    cards.push(adviceCard('Free Hit', headline, detail, urgency('freehit')));
+  } else {
+    cards.push(adviceCard('Free Hit', 'Not now', notReady('freehit')));
+  }
+
+  if (chipReady('wildcard')) {
+    const n = worries(mine).filter((w) => !w.bench).length;
+    const go = n >= 4;
+    cards.push(adviceCard(
+      'Wildcard',
+      go ? 'Worth considering' : 'Hold for now',
+      `${n} of your starting XI ${n === 1 ? 'is a worry' : 'are worries'} (see My team). A Wildcard makes sense when you'd need lots of transfers.`,
+      urgency('wildcard'),
+    ));
+  } else {
+    cards.push(adviceCard('Wildcard', 'Not now', notReady('wildcard')));
+  }
+
+  $('chip-advice').replaceChildren(...cards);
+}
+
+// Chart on the Chips tab: how many extra points each chip should earn, week by week.
+function drawChipChart() {
+  for (const t of document.querySelectorAll('.tab[data-view]')) t.hidden = true;
+  $('clear-chart').hidden = true;
+  $('chart-title').textContent = 'Chip value by gameweek';
+  $('axis-caption').textContent = 'Extra points each chip should earn, keeping your current squad';
+
+  const plan = team && nextGw ? chipPlan() : [];
+  // Only chips you can still play right now (each keeps its own colour).
+  const series = [
+    { label: 'Bench Boost', key: 'bb', slot: 1, chip: 'bboost' },
+    { label: 'Triple Captain', key: 'tc', slot: 2, chip: '3xc' },
+  ].filter((s) => chipReady(s.chip));
+  chart.data.labels = plan.map((w) => `GW${w.gw}`);
+  chart.data.datasets = plan.length
+    ? series.map((s) => lineDataset(s.label, plan.map((w) => Math.round(w[s.key] * 10) / 10), css(`--s${s.slot}`)))
+    : [];
+  chart.options.scales.x.offset = false;
+  chart.options.scales.y.beginAtZero = true;
+  chart.update();
+
+  const empty = $('chart-empty');
+  empty.hidden = plan.length > 0 && series.length > 0;
+  if (!plan.length) empty.replaceChildren(el('strong', '', 'No team yet'), el('span', '', 'Choose a team in the My team tab first.'));
+  else if (!series.length) empty.replaceChildren(el('strong', '', 'No Bench Boost or Triple Captain left'), el('span', '', 'See Your chips for when the next ones arrive.'));
+  drawLegend(plan.length ? series : []);
+
+  const status = chipStatus();
+  const current = status.filter((c) => c.start <= nextGw && c.stop >= nextGw);
+  const left = current.filter((c) => c.state === 'available').length;
+  const stop = current.length ? Math.max(...current.map((c) => c.stop)) : null;
+  const bb = chipReady('bboost') ? bestWeek(plan, 'bb') : null;
+  const tc = chipReady('3xc') ? bestWeek(plan, 'tc') : null;
+  let best = null;
+  if (bb && (!tc || bb.bb >= tc.tc)) best = ['Bench Boost', bb.gw];
+  else if (tc) best = ['Triple Captain', tc.gw];
+  $('stat-count-label').textContent = 'Chips left';
+  $('stat-count').textContent = team ? `${left} of ${current.length}` : '–';
+  $('stat-leader-label').textContent = best ? `Best week · ${best[0]}` : 'Best chip week';
+  $('stat-leader').textContent = best ? `GW${best[1]}` : '–';
+  $('stat-gw-label').textContent = 'Use them by';
+  $('stat-gw').textContent = stop ? `GW${stop} · ${stop - nextGw + 1} weeks` : '–';
+  markSelected();
 }
 
 // ---------- Mini league ----------

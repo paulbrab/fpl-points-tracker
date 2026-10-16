@@ -86,13 +86,14 @@ PORT=8080
 
 On the *My league* tab the chart becomes the **league race**: you plus the top of the table (up to 8 lines). *Vs average* shows how far above or below the league average each manager is after every gameweek. It's the easiest way to see who's pulling away.
 
-**Players (right), three tabs:**
+**Players (right), four tabs:**
 
 | Tab | What it shows |
 |---|---|
 | All players | Every player. Click a column name to sort. Filter by position and price. Hover a column name, or open "What do the columns mean?", for an explanation. |
 | My team | Pick a team from the dropdown. Shows the squad, bench, money in the bank, overall rank and predicted points. "Form" can be set per team (default: last 5 gameweeks). |
 | My league | Standings for one of your private leagues. Click a rival to compare against just them. |
+| Chips | Which chips you've used and which are left (you get two sets: one for GW1–19, one for GW20–38). A planner shows the best week for Bench Boost and Triple Captain, and flags blank and double gameweeks. |
 
 **Panel under the chart** changes with the tab:
 
@@ -101,8 +102,11 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 | All players | Quick picks | Hot + easy games, best value, due a goal, hidden gems |
 | My team | Team advice | Captain pick, worries (injured, out of form, a cheaper player scoring more, hard games), transfer ideas you can afford. Click a worry or transfer idea to compare both players on the chart. |
 | My league | League advice | Threats (players your rivals have and you don't), your differentials, who rivals are captaining |
+| Chips | Chip advice | When to play each chip, with a "use it or lose it" warning near the deadline. The chart shows each chip's value week by week. |
 
 **Fixture colours:** green = easy, red = hard. CAPITALS = home game, small letters = away.
+
+**Projected points** (used by the chip planner) take each player's usual points rate (half season average, half recent form) and scale it by each fixture: attackers by the goals their team is expected to score, defenders and keepers by their clean-sheet chances. They assume you keep your current squad. On GW7 they agreed broadly with FPL's own predictions (correlation 0.64, same average), but haven't been backtested like the fixture model.
 
 ## How fixture difficulty works
 

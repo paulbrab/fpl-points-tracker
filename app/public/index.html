@@ -41,7 +41,7 @@
             <span class="value" id="stat-leader">–</span>
           </div>
           <div class="stat">
-            <span class="label">Latest gameweek</span>
+            <span class="label" id="stat-gw-label">Latest gameweek</span>
             <span class="value" id="stat-gw">–</span>
           </div>
         </div>
@@ -66,6 +66,7 @@
         <div class="picks" id="picks"></div>
         <div class="picks" id="advice" hidden></div>
         <div class="picks" id="league-advice" hidden></div>
+        <div class="picks" id="chip-advice" hidden></div>
       </section>
     </div>
 
@@ -76,6 +77,7 @@
           <button class="tab active" data-tab="all" role="tab">All players</button>
           <button class="tab" data-tab="team" role="tab">My team</button>
           <button class="tab" data-tab="league" role="tab">My league</button>
+          <button class="tab" data-tab="chips" role="tab">Chips</button>
         </div>
       </div>
 
@@ -158,6 +160,17 @@
               <span title="Points between them and you. +10 means they are 10 ahead of you, −10 means 10 behind.">Gap</span>
             </div>
             <ul class="player-list league-list" id="league-list"></ul>
+          </div>
+
+          <div class="tab-body" id="tab-chips" hidden>
+            <p class="msg team-name" id="chips-msg">Choose a team in the My team tab first.</p>
+            <div id="chips-body" hidden>
+              <h3 class="section">Your chips</h3>
+              <div class="chip-grid" id="chip-grid"></div>
+              <h3 class="section">Best weeks <span class="head-note" id="planner-range"></span></h3>
+              <div class="planner-scroll"><table class="planner" id="planner"></table></div>
+              <p class="msg planner-note">Extra points each chip should earn that week if you keep your current squad. Darker = more points. ★ = best week. Hover a box for details.</p>
+            </div>
           </div>
         </div>
       </div>
