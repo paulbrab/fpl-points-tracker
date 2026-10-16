@@ -56,7 +56,7 @@ if (!$id || !$gw) {
     fail(400, 'Missing league or gameweek.');
 }
 
-$cacheFile = CACHE_DIR . "/league-$id-$gw.json";
+$cacheFile = CACHE_DIR . "/league-v2-$id-$gw.json";
 if (is_file($cacheFile) && time() - filemtime($cacheFile) < CACHE_SECONDS) {
     readfile($cacheFile);
     exit;
@@ -68,15 +68,18 @@ if (!$standings) {
 }
 
 $results = array_slice($standings['standings']['results'] ?? [], 0, MAX_MANAGERS);
+// Each manager's picks (who they own) and history (their total after every gameweek).
 $urls = [];
 foreach ($results as $r) {
-    $urls[$r['entry']] = BASE . "/entry/{$r['entry']}/event/$gw/picks/";
+    $urls["p{$r['entry']}"] = BASE . "/entry/{$r['entry']}/event/$gw/picks/";
+    $urls["h{$r['entry']}"] = BASE . "/entry/{$r['entry']}/history/";
 }
-$allPicks = fetchAll($urls);
+$fetched = fetchAll($urls);
 
 $managers = [];
 foreach ($results as $r) {
-    $p = $allPicks[$r['entry']] ?? null;
+    $p = $fetched["p{$r['entry']}"] ?? null;
+    $h = $fetched["h{$r['entry']}"] ?? null;
     $managers[] = [
         'entry'    => (int) $r['entry'],
         'team'     => $r['entry_name'],
@@ -86,6 +89,9 @@ foreach ($results as $r) {
         'total'    => (int) $r['total'],
         'gwPoints' => (int) $r['event_total'],
         'chip'     => $p['active_chip'] ?? null,
+        // Season total after each gameweek (transfer hits already taken off).
+        'history'  => array_map(fn ($e) => ['gw' => (int) $e['event'], 'total' => (int) $e['total_points']], $h['current'] ?? []),
+        'chipsUsed' => array_map(fn ($c) => ['name' => $c['name'], 'gw' => (int) $c['event']], $h['chips'] ?? []),
         'picks'    => array_map(fn ($x) => [
             'id'         => (int) $x['element'],
             'multiplier' => (int) $x['multiplier'],

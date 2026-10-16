@@ -16,7 +16,7 @@ let rival = null;          // entry ID of one rival to compare against, or null 
 let tab = 'all';
 let formWeeks = DEFAULT_FORM_WEEKS; // how many recent gameweeks count as "form"; saved per team
 let savedTeams = [];       // [{ name, id, formWeeks }] shared by everyone in the house
-let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
+let view = 'total';        // 'total' = running totals, 'gw' = points per gameweek bars, 'avg' = vs league average (league only)
 let sort = { key: 'total', dir: -1 };
 let chart;
 
@@ -161,7 +161,7 @@ function buildChart() {
           titleMarginBottom: 8,
           caretSize: 0,
           callbacks: {
-            label: (i) => ` ${i.dataset.label}   ${i.parsed.y} pts`,
+            label: (i) => ` ${i.dataset.label}   ${view === 'avg' && i.parsed.y > 0 ? '+' : ''}${i.parsed.y} pts`,
             labelPointStyle: () => ({ pointStyle: 'rectRounded', rotation: 0 }),
           },
         },
@@ -179,7 +179,7 @@ function buildChart() {
 function applyTheme() {
   const muted = css('--muted');
   Object.assign(chart.options.scales.x, { border: { color: css('--axis') }, ticks: { color: muted, padding: 6 } });
-  chart.options.scales.y.grid = { color: css('--grid') };
+  chart.options.scales.y.grid = { color: (c) => (view === 'avg' && c.tick?.value === 0 ? css('--axis') : css('--grid')) };
   chart.options.scales.y.border = { display: false };
   chart.options.scales.y.ticks.color = muted;
   Object.assign(chart.options.plugins.tooltip, {
@@ -195,11 +195,11 @@ function applyTheme() {
 // Points scored in each gameweek, worked out from the running totals.
 const perGameweek = (totals) => totals.map((t, i) => t - (totals[i - 1] ?? 0));
 
-function lineDataset(p, colour) {
+function lineDataset(label, data, colour) {
   return {
     type: 'line',
-    label: p.name,
-    data: p.points,
+    label,
+    data,
     borderColor: colour,
     backgroundColor: colour,
     borderWidth: 2,
@@ -211,11 +211,11 @@ function lineDataset(p, colour) {
   };
 }
 
-function barDataset(p, colour) {
+function barDataset(label, data, colour) {
   return {
     type: 'bar',
-    label: p.name,
-    data: perGameweek(p.points),
+    label,
+    data,
     backgroundColor: colour,
     borderColor: css('--surface'),
     borderWidth: { left: 1, right: 1 },
@@ -226,38 +226,131 @@ function barDataset(p, colour) {
   };
 }
 
-function drawChart() {
-  chart.data.labels = Array.from({ length: gameweeks }, (_, i) => `GW${i + 1}`);
-  chart.data.datasets = [...selected].map(([id, slot]) => {
-    const make = view === 'total' ? lineDataset : barDataset;
-    return make(players.get(id), css(`--s${slot}`));
+// On the My league tab the chart shows the league race; everywhere else, the chosen players.
+const raceMode = () => tab === 'league';
+
+// Each series: { key, label, totals (season total after each GW), slot (colour), removable }
+function playerSeries() {
+  return [...selected].map(([id, slot]) => {
+    const p = players.get(id);
+    return { key: id, label: p.name, totals: p.points, slot, removable: true };
   });
+}
+
+function raceWeeks() {
+  return Math.max(0, ...(league?.managers ?? []).flatMap((m) => m.history.map((h) => h.gw)));
+}
+
+// Season total after each gameweek, 0 before a manager joined.
+function managerTotals(m, weeks) {
+  const byGw = new Map(m.history.map((h) => [h.gw, h.total]));
+  let last = 0;
+  return Array.from({ length: weeks }, (_, i) => (last = byGw.get(i + 1) ?? last));
+}
+
+// You plus the top of the table, up to 8 lines. You always get the first colour.
+function raceSeries() {
+  if (!league) return [];
+  const weeks = raceWeeks();
+  const me = league.managers.find((m) => m.entry === team?.id);
+  const racers = [...(me ? [me] : []), ...league.managers.filter((m) => m !== me)].slice(0, MAX_ON_CHART);
+  const nameCount = {};
+  for (const m of league.managers) nameCount[m.team] = (nameCount[m.team] ?? 0) + 1;
+  return racers.map((m, i) => ({
+    key: m.entry,
+    label: nameCount[m.team] > 1 ? `${m.team} (${m.player.split(' ')[0]})` : m.team,
+    totals: managerTotals(m, weeks),
+    slot: i + 1,
+    isMe: m === me,
+  }));
+}
+
+// League average total after each gameweek (everyone in the league, not just those on the chart).
+function leagueAverage(weeks) {
+  const all = league.managers.map((m) => managerTotals(m, weeks));
+  return Array.from({ length: weeks }, (_, i) => all.reduce((sum, t) => sum + t[i], 0) / all.length);
+}
+
+const TITLES = {
+  players: { total: 'Cumulative points', gw: 'Points per gameweek' },
+  race: { total: 'League race', gw: 'League points per gameweek', avg: 'League race vs average' },
+};
+const CAPTIONS = {
+  total: 'Total points',
+  gw: 'Points scored that gameweek',
+  avg: 'Points above (+) or below (−) the league average',
+};
+
+function drawChart() {
+  const race = raceMode();
+  if (!race && view === 'avg') view = 'total';
+  for (const t of document.querySelectorAll('.tab[data-view]')) {
+    t.hidden = t.dataset.view === 'avg' && !race;
+    t.classList.toggle('active', t.dataset.view === view);
+    t.setAttribute('aria-selected', t.dataset.view === view);
+  }
+  $('chart-title').textContent = TITLES[race ? 'race' : 'players'][view];
+  $('axis-caption').textContent = CAPTIONS[view];
+
+  const series = race ? raceSeries() : playerSeries();
+  const weeks = race ? raceWeeks() : gameweeks;
+  let values = (s) => s.totals;
+  if (view === 'gw') values = (s) => perGameweek(s.totals);
+  if (view === 'avg' && league) {
+    const avg = leagueAverage(weeks);
+    values = (s) => s.totals.map((t, i) => Math.round((t - avg[i]) * 10) / 10);
+  }
+
+  chart.data.labels = Array.from({ length: weeks }, (_, i) => `GW${i + 1}`);
+  chart.data.datasets = series.map((s) => (view === 'gw' ? barDataset : lineDataset)(s.label, values(s), css(`--s${s.slot}`)));
   chart.options.scales.x.offset = view === 'gw';
+  chart.options.scales.y.beginAtZero = view !== 'avg';
   chart.update();
-  $('chart-empty').hidden = selected.size > 0;
-  $('clear-chart').hidden = selected.size === 0;
-  drawLegend();
-  drawStats();
+
+  const empty = $('chart-empty');
+  empty.hidden = series.length > 0;
+  if (!series.length) {
+    const msg = race
+      ? ['No league yet', team ? 'Choose a league on the right.' : 'Choose a team in the My team tab first.']
+      : ['No players yet', 'Click any player to add them to the chart (up to 8).'];
+    empty.replaceChildren(el('strong', '', msg[0]), el('span', '', msg[1]));
+  }
+  $('clear-chart').hidden = race || selected.size === 0;
+  drawLegend(series);
+  drawStats(series, race);
   markSelected();
 }
 
-function drawLegend() {
-  const items = [...selected].map(([id, slot]) => {
+function drawLegend(series) {
+  const items = series.map((s) => {
     const li = el('li');
     const swatch = el('span', 'swatch');
-    swatch.style.setProperty('--c', `var(--s${slot})`);
-    const x = el('button', '', '×');
-    x.title = 'Remove from chart';
-    x.onclick = () => toggle(id);
-    li.append(swatch, el('span', '', players.get(id).name), x);
+    swatch.style.setProperty('--c', `var(--s${s.slot})`);
+    li.append(swatch, el('span', s.isMe ? 'me' : '', s.isMe ? `${s.label} (you)` : s.label));
+    if (s.removable) {
+      const x = el('button', '', '×');
+      x.title = 'Remove from chart';
+      x.onclick = () => toggle(s.key);
+      li.append(x);
+    }
     return li;
   });
   $('legend').replaceChildren(...items);
 }
 
-function drawStats() {
-  $('stat-count').textContent = `${selected.size} / ${MAX_ON_CHART}`;
+function drawStats(series, race) {
   $('stat-gw').textContent = gameweeks ? `GW${gameweeks}` : '–';
+  if (race) {
+    const leader = league?.managers[0];
+    $('stat-count-label').textContent = 'Managers on chart';
+    $('stat-count').textContent = league ? `${series.length} of ${league.managers.length}` : '–';
+    $('stat-leader-label').textContent = 'League leader';
+    $('stat-leader').textContent = leader ? `${leader.team} · ${leader.total}` : '–';
+    return;
+  }
+  $('stat-count-label').textContent = 'On chart';
+  $('stat-count').textContent = `${selected.size} / ${MAX_ON_CHART}`;
+  $('stat-leader-label').textContent = 'Leader on chart';
   let leader = null;
   for (const id of selected.keys()) {
     const p = players.get(id);
@@ -279,12 +372,6 @@ function toggle(id) {
 
 function setView(name) {
   view = name;
-  for (const t of document.querySelectorAll('.tab[data-view]')) {
-    t.classList.toggle('active', t.dataset.view === name);
-    t.setAttribute('aria-selected', t.dataset.view === name);
-  }
-  $('chart-title').textContent = name === 'total' ? 'Cumulative points' : 'Points per gameweek';
-  $('axis-caption').textContent = name === 'total' ? 'Total points' : 'Points scored that gameweek';
   drawChart();
 }
 
@@ -620,6 +707,7 @@ function showTab(name) {
     if (team && !league) loadLeague();
     else drawLeague();
   }
+  drawChart();
 }
 
 // ---------- My team ----------
@@ -773,11 +861,13 @@ async function loadLeague() {
 function drawLeague() {
   drawStandings();
   drawLeagueAdvice();
+  if (raceMode()) drawChart();
 }
 
 function drawStandings() {
   if (!league) return $('league-list').replaceChildren();
   const me = league.managers.find((m) => m.entry === team?.id);
+  const raceSlots = new Map(raceSeries().map((r) => [r.key, r.slot]));
   const rows = league.managers.map((m) => {
     const li = el('li');
     const isMe = m === me;
@@ -790,6 +880,13 @@ function drawStandings() {
 
     const who = el('span', 'who');
     const name = el('span', 'name', m.team);
+    const slot = raceSlots.get(m.entry);
+    if (slot) {
+      const dot = el('span', 'race-dot');
+      dot.style.setProperty('--c', `var(--s${slot})`);
+      dot.title = 'On the league race chart';
+      name.prepend(dot);
+    }
     if (isMe) name.append(el('span', 'badge', 'You'));
     if (m.chip) name.append(el('span', 'flag warn', m.chip.replace('3xc', 'triple captain').replace('bboost', 'bench boost')));
     who.append(name, el('span', 'team', m.player));

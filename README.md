@@ -4,7 +4,9 @@ A web page to help you pick transfers and beat your mini league.
 
 ## What's on the screen
 
-**Chart (top left).** Click any player to add them (up to 8). Switch between *Total* (running total) and *Per gameweek* (bars).
+**Chart (top left).** Click any player to add them (up to 8). Switch between *Total* (running total) and *Per gameweek* (bars). *Clear* removes everyone.
+
+On the *My league* tab the chart becomes the **league race**: you plus the top of the table (up to 8 lines). *Vs average* shows how far above or below the league average each manager is after every gameweek. It's the easiest way to see who's pulling away.
 
 **Players (right), three tabs:**
 

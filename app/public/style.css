@@ -370,3 +370,8 @@ li.on .check { border-color: var(--c); }
 /* ---------- Chart header actions ---------- */
 
 .head-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- League race ---------- */
+
+.legend .me { color: var(--text); font-weight: 600; }
+.race-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: 1px; }
