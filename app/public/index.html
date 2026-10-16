@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPL Points Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="logo">FPL</span> Points Tracker</div>
+    <div class="sub" id="season-info">Season 2026/27</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel chart-panel">
+      <div class="panel-head">
+        <h2 id="chart-title">Cumulative points</h2>
+        <div class="tabs" role="tablist" aria-label="Chart view">
+          <button class="tab view active" data-view="total" role="tab">Total</button>
+          <button class="tab view" data-view="gw" role="tab">Per gameweek</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="label">On chart</span>
+          <span class="value" id="stat-count">0 / 8</span>
+        </div>
+        <div class="stat">
+          <span class="label">Leader on chart</span>
+          <span class="value" id="stat-leader">–</span>
+        </div>
+        <div class="stat">
+          <span class="label">Latest gameweek</span>
+          <span class="value" id="stat-gw">–</span>
+        </div>
+      </div>
+
+      <div class="chart-area">
+        <div class="axis-caption" id="axis-caption">Total points</div>
+        <div class="chart-wrap">
+          <canvas id="chart" aria-label="Cumulative points chart"></canvas>
+          <div class="empty" id="chart-empty">
+            <strong>No players yet</strong>
+            <span>Click players on the right to add them to the chart (up to 8).</span>
+          </div>
+        </div>
+        <ul class="legend" id="legend"></ul>
+      </div>
+    </section>
+
+    <section class="panel list-panel">
+      <div class="panel-head">
+        <h2>Players</h2>
+      </div>
+
+      <div class="toolbar">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="all" role="tab">All players</button>
+          <button class="tab" data-tab="team" role="tab">My team</button>
+        </div>
+      </div>
+
+      <div class="tab-body" id="tab-all">
+        <div class="filters">
+          <label class="search">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+            <input id="search" type="search" placeholder="Search name or team" aria-label="Search players">
+          </label>
+          <select id="pos" aria-label="Position">
+            <option value="">All positions</option>
+            <option value="Goalkeeper">Goalkeepers</option>
+            <option value="Defender">Defenders</option>
+            <option value="Midfielder">Midfielders</option>
+            <option value="Forward">Forwards</option>
+          </select>
+        </div>
+        <div class="table-head"><span></span><span>Player</span><span>Pos</span><span>Price</span><span>Pts</span></div>
+        <ul class="player-list" id="all-list"></ul>
+      </div>
+
+      <div class="tab-body" id="tab-team" hidden>
+        <form id="team-form" class="filters">
+          <input id="team-id" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Your FPL team ID" aria-label="FPL team ID" required>
+          <button type="submit" class="btn">Load team</button>
+        </form>
+        <div class="team-head">
+          <p class="msg" id="team-msg">Find your ID in the FPL site address bar: fantasy.premierleague.com/entry/<b>1234567</b>/event/…</p>
+          <button type="button" class="btn ghost small" id="chart-team" hidden title="Replace the chart with the 8 highest scorers in your starting XI">Chart my top 8</button>
+        </div>
+        <div class="table-head"><span></span><span>Player</span><span>Pos</span><span>Price</span><span>Pts</span></div>
+        <ul class="player-list" id="team-list"></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous"></script>
+<script src="app.js"></script>
+</body>
+</html>

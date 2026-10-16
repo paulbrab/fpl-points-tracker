@@ -1,0 +1,13 @@
+services:
+  app:
+    image: php:8.4-cli-alpine
+    user: "1000:1000"
+    working_dir: /app
+    command: php -S 0.0.0.0:8000 -t public
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./:/app
+      - ../FPL-Elo-Insights/data:/data:ro
+    environment:
+      SEASON: "2026-2027"
