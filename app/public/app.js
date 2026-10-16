@@ -10,6 +10,7 @@ let fixtures = {};         // team short name -> next few fixtures, each with a 
 let gameweeks = 0;
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
+let team = null;           // loaded team details: name, bank, rank...
 let savedTeams = [];       // [{ name, id }] shared by everyone in the house
 let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
 let sort = { key: 'total', dir: -1 };
@@ -401,6 +402,24 @@ const PICKS = [
   },
 ];
 
+// One card of up to 5 clickable players. items: [{ p, name?, sub, value, onClick? }]
+function pickCard(title, help, items, empty = 'Nothing to show.') {
+  const ol = el('ol');
+  for (const it of items) {
+    const li = el('li');
+    li.dataset.id = it.p.id;
+    const nm = el('span', 'nm');
+    nm.append(el('b', '', it.name ?? it.p.name), it.sub instanceof Node ? it.sub : el('small', '', it.sub));
+    li.append(el('span', 'dot'), nm, el('span', 'v', it.value ?? ''));
+    li.onclick = it.onClick ?? (() => toggle(it.p.id));
+    ol.append(li);
+  }
+  if (!items.length) ol.append(el('li', 'none', empty));
+  const card = el('div', 'pick');
+  card.append(el('h3', '', title), el('p', '', help), ol);
+  return card;
+}
+
 function drawPicks() {
   const pool = [...players.values()].filter((p) => p.available && passesFilters(p, false));
   const cards = PICKS.map((pick) => {
@@ -408,21 +427,12 @@ function drawPicks() {
       .filter((p) => !pick.keep || pick.keep(p))
       .sort((a, b) => pick.rank(b) - pick.rank(a))
       .slice(0, 5);
-
-    const ol = el('ol');
-    for (const p of top) {
-      const li = el('li');
-      li.dataset.id = p.id;
-      const nm = el('span', 'nm');
-      const sub = pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`;
-      nm.append(el('b', '', p.name), sub instanceof Node ? sub : el('small', '', sub));
-      li.append(el('span', 'dot'), nm, el('span', 'v', pick.show(p)));
-      li.onclick = () => toggle(p.id);
-      ol.append(li);
-    }
-    const card = el('div', 'pick');
-    card.append(el('h3', '', pick.title), el('p', '', pick.help), ol);
-    return card;
+    const items = top.map((p) => ({
+      p,
+      sub: pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`,
+      value: pick.show(p),
+    }));
+    return pickCard(pick.title, pick.help, items);
   });
   $('picks').replaceChildren(...cards);
 
@@ -430,6 +440,135 @@ function drawPicks() {
   const price = $('max-price').value ? ` · ${$('max-price').selectedOptions[0].textContent}` : '';
   $('picks-pos').textContent = `· ${pos}${price}`;
   markSelected();
+}
+
+// ---------- Team advice ----------
+
+// "In form with easy games coming up" - used for quick picks and transfer ideas.
+const hotEasy = (p) => (p.run ? p.form * (3 / p.run) : p.form);
+
+function squad() {
+  return teamPicks.filter((pk) => players.has(pk.id)).map((pk) => ({ ...pk, p: players.get(pk.id) }));
+}
+
+function nextGame(p) {
+  const f = p.fixtures[0];
+  return f ? `${f.home ? 'vs' : 'at'} ${f.opp} · ${DIFF_WORDS[f.diff].toLowerCase()}` : 'no game';
+}
+
+// Best captain: FPL's predicted points, nudged up for an easy game and down for a hard one.
+function captainCard(mine) {
+  const score = (p) => (p.predNext ?? 0) * (1 + (3 - (p.fixtures[0]?.diff ?? 3)) * 0.1);
+  const top = mine
+    .filter((m) => !m.bench && m.p.available)
+    .sort((a, b) => score(b.p) - score(a.p))
+    .slice(0, 3);
+  const roles = ['Captain', 'Vice', 'Next best'];
+  const items = top.map((m, i) => ({
+    p: m.p,
+    sub: `${roles[i]} · ${nextGame(m.p)}`,
+    value: `${fixed(m.p.predNext)} pts`,
+  }));
+  return pickCard('Captain', 'Who to give the armband. Uses predicted points and how easy the next game is.', items);
+}
+
+// Players who might cost you points, with the reasons in plain words.
+function worries(mine) {
+  const list = [];
+  for (const m of mine) {
+    const p = m.p;
+    if (m.bench && p.pos === 'Goalkeeper') continue; // a backup keeper not playing is normal
+    const why = [];
+    let level = 0;
+    if (['i', 's', 'u'].includes(p.status)) { why.push({ i: 'Injured', s: 'Suspended', u: 'Not available' }[p.status]); level += 3; }
+    if (p.status === 'd') { why.push(p.chance != null ? `${p.chance}% chance to play` : 'Doubtful'); level += 2; }
+    if (p.available && gameweeks >= 3 && p.minsPct < 50) { why.push('Not playing much'); level += 1.5; }
+    if (p.available && p.form <= FORM_WEEKS * 1.5) { why.push(`Only ${p.form} pts in ${FORM_WEEKS} GWs`); level += 1; }
+    if (p.run >= 3.8) { why.push('Hard games next'); level += 1; }
+    if (level) list.push({ ...m, why, level: m.bench ? level / 2 : level });
+  }
+  return list.sort((a, b) => b.level - a.level);
+}
+
+function worriesCard(list) {
+  const items = list.slice(0, 5).map((w) => ({ p: w.p, sub: w.why.join(' · '), value: w.bench ? 'bench' : '' }));
+  return pickCard('Worries', 'Players who might cost you points.', items, 'No worries. Nice squad!');
+}
+
+// For each worry, the best in-form, easy-fixture swap you can afford.
+function transfersCard(mine, list) {
+  const owned = new Set(mine.map((m) => m.p.id));
+  const clubCount = {};
+  for (const m of mine) clubCount[m.p.team] = (clubCount[m.p.team] ?? 0) + 1;
+
+  const items = [];
+  const used = new Set();
+  for (const w of list) {
+    if (items.length >= 4) break;
+    const out = w.p;
+    const budget = out.cost + (team?.bank ?? 0);
+    const best = [...players.values()]
+      .filter((p) => p.pos === out.pos && p.available && !owned.has(p.id) && !used.has(p.id))
+      .filter((p) => p.cost <= budget + 0.001 && p.minsPct >= 50)
+      .filter((p) => p.team === out.team || (clubCount[p.team] ?? 0) < 3)
+      .sort((a, b) => hotEasy(b) - hotEasy(a))[0];
+    if (!best || hotEasy(best) <= hotEasy(out)) continue;
+    used.add(best.id);
+    items.push({
+      p: best,
+      name: `${out.name} → ${best.name}`,
+      sub: `${best.team} · £${fixed(best.cost)}m · ${best.form} pts last ${FORM_WEEKS} GWs`,
+      value: `${best.form} pts`,
+      onClick: () => compare([out.id, best.id]),
+    });
+  }
+  return pickCard(
+    'Transfer ideas',
+    'Swaps for your worries that fit your budget. Click to compare both on the chart.',
+    items,
+    'No obvious upgrades right now.',
+  );
+}
+
+// Headline numbers for the loaded team, shown above the team table.
+function drawTeamStats() {
+  const box = $('team-stats');
+  box.hidden = !team;
+  if (!team) return;
+  const xi = squad().filter((m) => !m.bench);
+  const captain = xi.find((m) => m.captain);
+  const predicted = xi.reduce((sum, m) => sum + (m.p.predNext ?? 0), 0) + (captain?.p.predNext ?? 0);
+  const facts = [
+    ['Bank', `£${fixed(team.bank)}m`, 'Money left to spend on transfers.'],
+    ['Squad value', `£${fixed(team.value)}m`, 'What your 15 players are worth.'],
+    [`GW${team.gw} points`, team.gwPoints ?? '–', 'Points scored in the latest gameweek.'],
+    ['Overall rank', team.rank ? team.rank.toLocaleString() : '–', 'Your position among every FPL team in the world.'],
+    ['Predicted next', `${fixed(predicted, 0)} pts`, "FPL's predicted points for your starting XI next gameweek (captain counted twice)."],
+  ];
+  box.replaceChildren(...facts.map(([label, value, help]) => {
+    const stat = el('div', 'stat');
+    stat.title = help;
+    stat.append(el('span', 'label', label), el('span', 'value', value));
+    return stat;
+  }));
+}
+
+function drawAdvice() {
+  if (!team) {
+    const note = el('p', 'msg', 'Choose a team in the My team tab to see advice.');
+    $('advice').replaceChildren(note);
+    return;
+  }
+  const mine = squad();
+  const list = worries(mine);
+  $('advice').replaceChildren(captainCard(mine), worriesCard(list), transfersCard(mine, list));
+  markSelected();
+}
+
+// Show exactly these players on the chart (e.g. a transfer: out vs in).
+function compare(ids) {
+  selected = new Map(ids.map((id, i) => [id, i + 1]));
+  drawChart();
 }
 
 // Highlight anything that's on the chart, in every list.
@@ -449,6 +588,18 @@ function showTab(name) {
   $('tab-all').hidden = name !== 'all';
   $('tab-team').hidden = name !== 'team';
   $('list-filters').hidden = name !== 'all';
+
+  // The panel under the chart follows the tab: quick picks for all players, advice for my team.
+  const isTeam = name === 'team';
+  $('picks').hidden = isTeam;
+  $('advice').hidden = !isTeam;
+  $('picks-title').textContent = isTeam ? 'Team advice' : 'Quick picks';
+  if (isTeam) {
+    $('picks-pos').textContent = team ? `· ${team.name}` : '';
+    drawAdvice();
+  } else {
+    drawPicks();
+  }
 }
 
 // ---------- My team ----------
@@ -462,16 +613,20 @@ async function loadTeam(id) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not load team.');
     teamPicks = data.picks;
+    team = data;
     msg.className = 'msg team-name';
     msg.textContent = `${data.name} · GW${data.gw} picks`;
     $('chart-team').hidden = false;
     try { localStorage.setItem('fplTeamId', id); } catch {}
   } catch (e) {
     teamPicks = [];
+    team = null;
     msg.textContent = e.message;
     $('chart-team').hidden = true;
   }
   drawTeamList();
+  drawTeamStats();
+  if (!$('advice').hidden) showTab('team');
 }
 
 // ---------- Saved household teams ----------

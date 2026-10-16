@@ -57,9 +57,10 @@
 
       <section class="panel picks-panel">
         <div class="panel-head">
-          <h2>Quick picks <span class="head-note" id="picks-pos">· All positions</span></h2>
+          <h2><span id="picks-title">Quick picks</span> <span class="head-note" id="picks-pos">· All positions</span></h2>
         </div>
         <div class="picks" id="picks"></div>
+        <div class="picks" id="advice" hidden></div>
       </section>
     </div>
 
@@ -126,6 +127,7 @@
               <p class="msg" id="team-msg">Add your teams with "Edit teams" to get started.</p>
               <button type="button" class="btn ghost small" id="chart-team" hidden title="Replace the chart with the 8 highest scorers in your starting XI">Chart my top 8</button>
             </div>
+            <div class="stats team-stats" id="team-stats" hidden></div>
             <div class="table-head" id="team-head"></div>
             <ul class="player-list" id="team-list"></ul>
           </div>

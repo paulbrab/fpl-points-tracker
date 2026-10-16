@@ -330,3 +330,13 @@ li.on .check { border-color: var(--c); }
 .fx.d5 { background: var(--d5); color: var(--d5-text); }
 .fx-row.mini { padding: 3px 0 1px; }
 .fx-row.mini .fx { width: 14px; height: 6px; border-radius: 2px; }
+
+/* ---------- Team advice ---------- */
+
+.pick li.none { display: block; cursor: default; color: var(--muted); }
+.pick li.none:hover { background: none; }
+#advice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#advice .pick:nth-child(3) { padding-right: 0; }
+.team-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: 12px; margin-bottom: 8px; }
+.team-stats .value { font-size: 16px; }
+#advice > .msg { grid-column: 1 / -1; }

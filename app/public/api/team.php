@@ -44,9 +44,16 @@ if (!$picks) {
     fail(404, 'No picks found for this team yet.');
 }
 
+$history = $picks['entry_history'] ?? [];
+
 echo json_encode([
     'name'  => $entry['name'] ?? "Team $id",
     'gw'    => $gw,
+    'bank'  => ($history['bank'] ?? 0) / 10,        // FPL stores money in tenths of a million
+    'value' => ($history['value'] ?? 0) / 10,
+    'gwPoints'    => $history['points'] ?? null,
+    'totalPoints' => $entry['summary_overall_points'] ?? null,
+    'rank'        => $entry['summary_overall_rank'] ?? null,
     'picks' => array_map(fn ($p) => [
         'id'      => (int) $p['element'],
         'captain' => (bool) $p['is_captain'],
