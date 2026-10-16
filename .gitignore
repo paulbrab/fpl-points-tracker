@@ -1,2 +1,3 @@
 app/storage/
 app/.env
+__pycache__/

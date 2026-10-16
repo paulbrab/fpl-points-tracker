@@ -106,7 +106,7 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 
 **Fixture colours:** green = easy, red = hard. CAPITALS = home game, small letters = away.
 
-**Projected points** (used by the chip planner) take each player's usual points rate (half season average, half recent form) and scale it by each fixture: attackers by the goals their team is expected to score, defenders and keepers by their clean-sheet chances. They assume you keep your current squad. On GW7 they agreed broadly with FPL's own predictions (correlation 0.64, same average), but haven't been backtested like the fixture model.
+**Projected points** (used by the chip planner) take each player's usual points rate (80% season average, 20% recent form) and scale it by each fixture: attackers by the goals their team is expected to score, defenders and keepers by their clean-sheet chances. Double gameweeks add both games. They assume you keep your current squad. See [How we know the projections work](#how-we-know-the-projections-work).
 
 ## How fixture difficulty works
 
@@ -131,6 +131,24 @@ The current model was better in 98–99% of bootstrap resamples, in both seasons
 
 Run it yourself (needs Python 3, nothing else): `python3 tools/backtest_fixtures.py FPL-Elo-Insights/data`
 
+### How we know the projections work
+
+`tools/backtest_projections.py` replays 2025/26 from GW6. Before each gameweek it uses only what was known then (points so far, injuries, fixture ratings from earlier matches) to project every regular player's points, and compares with what they really scored.
+
+| Model | Next week: error | Next week: correlation | 4 weeks ahead: error | 4 weeks ahead: correlation |
+|---|---|---|---|---|
+| FPL's own prediction | 3.34 | 0.30 | – | – |
+| Usual points rate, ignoring fixtures | 3.06 | 0.34 | 3.24 | 0.22 |
+| Recent form only | 3.26 | 0.31 | 3.48 | 0.20 |
+| **App (80% season, 20% form, with fixtures)** | **3.07** | **0.35** | **3.28** | **0.23** |
+
+- **Better than FPL's own prediction** last season, on both measures.
+- **Season average beats recent form.** We tested mixes from 50/50 to 100% season; 80/20 was best.
+- **Does the planner's ★ week mean anything?** For the top 20 players each week, it picked their best of the next 10 normal (single-game) weeks. That week scored **1.26 points more** than an average week (90% range +0.96 to +1.55), and **2.06 more** than the week it rated hardest. That's what Triple Captain relies on.
+- **Honest limits:** single weeks are very random (one goal is 4–6 points), so errors of about 3 points are normal for any model. The fixture effect slightly exaggerates how big the swings are: toning it down made errors a tiny bit smaller but made the ranking of weeks worse, so we kept it.
+
+Run it yourself: `python3 tools/backtest_projections.py FPL-Elo-Insights/data`
+
 ## Privacy and safety
 
 - Saved teams (names and FPL IDs) are kept in `app/storage/teams.json` on your computer. They're never committed to git or sent anywhere except the FPL website.
@@ -149,6 +167,7 @@ Run it yourself (needs Python 3, nothing else): `python3 tools/backtest_fixtures
 | `app/public/api/league.php` | League standings and every rival's squad |
 | `app/public/api/teams.php` | Saves the team list |
 | `tools/backtest_fixtures.py` | Tests the fixture difficulty model against past seasons |
+| `tools/backtest_projections.py` | Tests the points projections (used by the chip planner) against last season |
 | `FPL-Elo-Insights/` | The player data ([separate project](https://github.com/olbauday/FPL-Elo-Insights), linked as a git submodule) |
 
 ## Credits

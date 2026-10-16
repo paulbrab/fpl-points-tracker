@@ -13,7 +13,7 @@ import math
 import random
 import sys
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else 'FPL-Elo-Insights/data'
+BASE = sys.argv[1] if len(sys.argv) > 1 and __name__ == '__main__' else 'FPL-Elo-Insights/data'
 
 
 def load(season):
@@ -106,27 +106,34 @@ def rmse(errors):
 
 
 SEASONS = [('2025-2026', '2024-2025'), ('2026-2027', '2025-2026')]
-BASELINE = dict(name='Baseline: every team average', baseline=True, k=0, half_life=None, adjusted=False, shrink=1)
-OLD = dict(name='Old: unadjusted, prior 10 games, no shrink', k=10, half_life=None, adjusted=False, shrink=1)
 CHOSEN = dict(name='Chosen: adjusted, prior 30 games, shrink 0.5', k=30, half_life=None, adjusted=True, shrink=0.5)
 
-configs = [BASELINE, OLD, CHOSEN]
-for adjusted, k, half_life, shrink in itertools.product([False, True], [0, 10, 20, 30, 40], [None, 8, 20], [0.5, 0.75, 1]):
-    if k == 0 and shrink != 1:
-        continue
-    configs.append(dict(name=f"{'adjusted' if adjusted else 'unadjusted'}, prior {k} games, shrink {shrink}, half-life {half_life or 'none'}",
-                        k=k, half_life=half_life, adjusted=adjusted, shrink=shrink))
 
-print('Average error in predicted xG per team per match (lower is better)\n')
-print(f"{'model':58} {'2025/26':>8} {'2026/27 so far':>15}")
-scored = [(rmse(squared_errors(*SEASONS[0], c)), rmse(squared_errors(*SEASONS[1], c)), c['name']) for c in configs]
-for row in scored[:3] + sorted(scored[3:])[:10]:
-    print(f'{row[2]:58} {row[0]:8.4f} {row[1]:15.4f}')
+def main():
+    BASELINE = dict(name='Baseline: every team average', baseline=True, k=0, half_life=None, adjusted=False, shrink=1)
+    OLD = dict(name='Old: unadjusted, prior 10 games, no shrink', k=10, half_life=None, adjusted=False, shrink=1)
 
-print('\nIs the chosen model really better than the old one? (paired bootstrap over matches)')
-random.seed(1)
-for season, last in SEASONS:
-    old, new = squared_errors(season, last, OLD), squared_errors(season, last, CHOSEN)
-    per_match = [(old[i] + old[i + 1]) - (new[i] + new[i + 1]) for i in range(0, len(old), 2)]
-    boots = [sum(random.choices(per_match, k=len(per_match))) for _ in range(5000)]
-    print(f'  {season}: better in {sum(b > 0 for b in boots) / len(boots):.0%} of resamples ({len(per_match)} matches)')
+    configs = [BASELINE, OLD, CHOSEN]
+    for adjusted, k, half_life, shrink in itertools.product([False, True], [0, 10, 20, 30, 40], [None, 8, 20], [0.5, 0.75, 1]):
+        if k == 0 and shrink != 1:
+            continue
+        configs.append(dict(name=f"{'adjusted' if adjusted else 'unadjusted'}, prior {k} games, shrink {shrink}, half-life {half_life or 'none'}",
+                            k=k, half_life=half_life, adjusted=adjusted, shrink=shrink))
+
+    print('Average error in predicted xG per team per match (lower is better)\n')
+    print(f"{'model':58} {'2025/26':>8} {'2026/27 so far':>15}")
+    scored = [(rmse(squared_errors(*SEASONS[0], c)), rmse(squared_errors(*SEASONS[1], c)), c['name']) for c in configs]
+    for row in scored[:3] + sorted(scored[3:])[:10]:
+        print(f'{row[2]:58} {row[0]:8.4f} {row[1]:15.4f}')
+
+    print('\nIs the chosen model really better than the old one? (paired bootstrap over matches)')
+    random.seed(1)
+    for season, last in SEASONS:
+        old, new = squared_errors(season, last, OLD), squared_errors(season, last, CHOSEN)
+        per_match = [(old[i] + old[i + 1]) - (new[i] + new[i + 1]) for i in range(0, len(old), 2)]
+        boots = [sum(random.choices(per_match, k=len(per_match))) for _ in range(5000)]
+        print(f'  {season}: better in {sum(b > 0 for b in boots) / len(boots):.0%} of resamples ({len(per_match)} matches)')
+
+
+if __name__ == '__main__':
+    main()

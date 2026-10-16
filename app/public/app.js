@@ -54,9 +54,9 @@ function addStats(p) {
   p.fixtures = (fixtures[p.team] ?? []).map((f) => ({ ...f, diff: f[side] }));
   const soon = p.fixtures.filter((f) => f.gw < nextGw + 5);
   p.run = soon.length ? soon.reduce((sum, f) => sum + f.diff, 0) / soon.length : null;
-  // Usual points per gameweek: half season average, half recent form.
+  // Usual points per gameweek: 80% season average, 20% recent form (best mix in tools/backtest_projections.py).
   const formGws = Math.min(formWeeks, gameweeks) || 1;
-  p.rate = gameweeks ? 0.5 * (total / gameweeks) + 0.5 * (p.form / formGws) : 0;
+  p.rate = gameweeks ? 0.8 * (total / gameweeks) + 0.2 * (p.form / formGws) : 0;
 }
 
 // Roughly where each position's points come from: [playing & bonus, clean sheets, goals & assists].
