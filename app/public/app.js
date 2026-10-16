@@ -6,7 +6,9 @@ const POS_ORDER = { Goalkeeper: 1, Defender: 2, Midfielder: 3, Forward: 4 };
 const DEFAULT_FORM_WEEKS = 5;
 
 let players = new Map();   // id -> player
-let fixtures = {};         // team short name -> next few fixtures, each with a 1-5 difficulty
+let fixtures = {};         // team short name -> fixtures for the rest of the season, each with a 1-5 difficulty
+let nextGw = 0;            // the next gameweek to be played
+let avgXg = 1.4;           // league-average xG per team per game (from the fixtures model)
 let gameweeks = 0;
 let season = '';           // e.g. "2026/27", from the data
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
@@ -50,7 +52,36 @@ function addStats(p) {
   // Defenders and keepers care about goals conceded; everyone else about goals scored.
   const side = p.posOrder <= 2 ? 'def' : 'att';
   p.fixtures = (fixtures[p.team] ?? []).map((f) => ({ ...f, diff: f[side] }));
-  p.run = p.fixtures.length ? p.fixtures.reduce((sum, f) => sum + f.diff, 0) / p.fixtures.length : null;
+  const soon = p.fixtures.filter((f) => f.gw < nextGw + 5);
+  p.run = soon.length ? soon.reduce((sum, f) => sum + f.diff, 0) / soon.length : null;
+  // Usual points per gameweek: half season average, half recent form.
+  const formGws = Math.min(formWeeks, gameweeks) || 1;
+  p.rate = gameweeks ? 0.5 * (total / gameweeks) + 0.5 * (p.form / formGws) : 0;
+}
+
+// Roughly where each position's points come from: [playing & bonus, clean sheets, goals & assists].
+const POINT_SOURCES = {
+  Goalkeeper: [0.5, 0.5, 0],
+  Defender: [0.4, 0.4, 0.2],
+  Midfielder: [0.4, 0.1, 0.5],
+  Forward: [0.35, 0, 0.65],
+};
+
+// Projected points in one gameweek: the player's usual rate, scaled by each fixture.
+// Easier opponents mean more expected goals (attackers) and better clean-sheet odds (defenders).
+// Double gameweeks add up both games; no game = 0.
+function projected(p, gw) {
+  const games = p.fixtures.filter((f) => f.gw === gw);
+  if (!games.length || p.status === 'u') return 0;
+  let chance = 1;
+  if (['i', 's'].includes(p.status) && gw < nextGw + 2) chance = 0; // assume out for a couple of weeks
+  if (p.status === 'd' && gw === nextGw) chance = (p.chance ?? 50) / 100;
+  const [base, cleanSheet, attack] = POINT_SOURCES[p.pos] ?? [1, 0, 0];
+  const perGame = games.reduce(
+    (sum, f) => sum + base + cleanSheet * Math.exp(avgXg - f.xgAgainst) + attack * (f.xgFor / avgXg),
+    0,
+  );
+  return chance * p.rate * perGame;
 }
 
 const DIFF_WORDS = ['', 'Very easy', 'Easy', 'Medium', 'Hard', 'Very hard'];
@@ -1019,10 +1050,13 @@ function chartTeam() {
 async function init() {
   buildChart();
 
-  const [res, fxRes] = await Promise.all([fetch('api/players.php'), fetch('api/fixtures.php')]);
+  const [res, fxRes] = await Promise.all([fetch('api/players.php'), fetch('api/fixtures.php?weeks=38')]);
   if (!res.ok) throw new Error(`server returned ${res.status}`);
   const data = await res.json();
-  fixtures = fxRes.ok ? (await fxRes.json()).teams : {};
+  const fx = fxRes.ok ? await fxRes.json() : {};
+  fixtures = fx.teams ?? {};
+  nextGw = fx.nextGw ?? 0;
+  avgXg = fx.avgXg ?? avgXg;
   gameweeks = data.gameweeks;
   season = data.season;
   players = new Map(data.players.map((p) => [p.id, p]));

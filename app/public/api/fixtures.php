@@ -20,7 +20,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json');
 
-const WEEKS_AHEAD = 5;
+const WEEKS_AHEAD = 5;     // weeks used for the 1-5 colour bands (and the default to return)
 const PRIOR_GAMES = 30;    // how much last season counts, in games
 const PRIOR_SHRINK = 0.5;  // how much of last season's difference from average carries over
 const FIT_ROUNDS = 30;     // rounds of fitting; ratings settle well before this
@@ -175,8 +175,10 @@ if (!$played && !$lastPlayed) {
 $rating = $played ? rateTeams($played, $avg, $homeBoost, $prior, PRIOR_GAMES) : $prior;
 
 // Only the next few gameweeks.
+// ?weeks=N returns more gameweeks (e.g. for chip planning); colour bands still use the next WEEKS_AHEAD.
+$weeks = filter_input(INPUT_GET, 'weeks', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 38]]) ?: WEEKS_AHEAD;
 $nextGw = min(array_column($upcoming, 'gw'));
-$upcoming = array_filter($upcoming, fn ($f) => $f['gw'] < $nextGw + WEEKS_AHEAD);
+$upcoming = array_filter($upcoming, fn ($f) => $f['gw'] < $nextGw + $weeks);
 usort($upcoming, fn ($a, $b) => [$a['gw'], $a['kickoff']] <=> [$b['gw'], $b['kickoff']]);
 
 // From each team's point of view: how tough is the opponent, and how many goals do we expect each way?
@@ -217,8 +219,9 @@ function band(float $v, array $cuts): int
     }
     return $b;
 }
-$attCuts = cuts(array_map(fn ($r) => -$r['attEase'], $rows));
-$defCuts = cuts(array_column($rows, 'defThreat'));
+$soon = array_filter($rows, fn ($r) => $r['gw'] < $nextGw + WEEKS_AHEAD);
+$attCuts = cuts(array_map(fn ($r) => -$r['attEase'], $soon));
+$defCuts = cuts(array_column($soon, 'defThreat'));
 
 $out = [];
 foreach ($rows as $r) {
@@ -234,4 +237,4 @@ foreach ($rows as $r) {
     ];
 }
 
-echo json_encode(['nextGw' => $nextGw, 'weeks' => WEEKS_AHEAD, 'teams' => $out]);
+echo json_encode(['nextGw' => $nextGw, 'weeks' => $weeks, 'avgXg' => round($avg, 3), 'teams' => $out]);
