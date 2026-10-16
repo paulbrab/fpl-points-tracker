@@ -2,12 +2,15 @@
 
 const MAX_ON_CHART = 8;
 const POS_SHORT = { Goalkeeper: 'GK', Defender: 'DEF', Midfielder: 'MID', Forward: 'FWD' };
+const POS_ORDER = { Goalkeeper: 1, Defender: 2, Midfielder: 3, Forward: 4 };
+const FORM_WEEKS = 4;
 
 let players = new Map();   // id -> player
 let gameweeks = 0;
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
-let view = 'total';      // 'total' = running total line, 'gw' = points per gameweek bars
+let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
+let sort = { key: 'total', dir: -1 };
 let chart;
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +21,61 @@ const el = (tag, className, text) => {
   if (text !== undefined) node.textContent = text;
   return node;
 };
+const fixed = (n, d = 1) => (n == null ? '–' : n.toFixed(d));
+
+// ---------- Player stats ----------
+
+// Extra numbers worked out from the raw data, once, when it loads.
+function addStats(p) {
+  const pts = p.points;
+  const total = pts.at(-1) ?? 0;
+  p.total = total;
+  p.form = total - (pts[pts.length - 1 - FORM_WEEKS] ?? 0);
+  p.value = p.cost ? total / p.cost : 0;
+  p.minutes ??= 0;
+  p.minsPct = gameweeks ? Math.min(100, (p.minutes / (gameweeks * 90)) * 100) : 0;
+  p.xgi90 = p.minutes >= 90 ? (p.xgi / p.minutes) * 90 : null;
+  p.unlucky = (p.xgi ?? 0) - ((p.goals ?? 0) + (p.assists ?? 0));
+  p.available = !['i', 's', 'u'].includes(p.status);
+  p.posOrder = POS_ORDER[p.pos] ?? 9;
+}
+
+// Each column: what it shows, how to sort it, and a plain-English explanation.
+const COLUMNS = [
+  { key: 'posOrder', label: 'Pos',    show: (p) => POS_SHORT[p.pos] ?? p.pos, cls: 'pos', dir: 1,
+    help: 'Position: goalkeeper, defender, midfielder or forward.' },
+  { key: 'cost',     label: 'Price',  show: (p) => (p.cost ? `£${fixed(p.cost)}` : '–'),
+    help: 'What the player costs right now, in millions.' },
+  { key: 'total',    label: 'Pts',    show: (p) => p.total, cls: 'num pts',
+    help: 'Total points this season.' },
+  { key: 'form',     label: 'Form',   show: (p) => p.form,
+    help: `Points in the last ${FORM_WEEKS} gameweeks. Shows who is hot right now.` },
+  { key: 'predNext', label: 'Next',   show: (p) => fixed(p.predNext),
+    help: "FPL's own guess at how many points they'll score next gameweek." },
+  { key: 'value',    label: 'Value',  show: (p) => fixed(p.value),
+    help: 'Points for every £1m of price. Higher means more points for your money.' },
+  { key: 'xgi90',    label: 'Threat', show: (p) => fixed(p.xgi90, 2),
+    help: 'Expected goals + assists per 90 minutes. How dangerous their chances are, even if they missed them.' },
+  { key: 'minsPct',  label: 'Plays',  show: (p) => `${Math.round(p.minsPct)}%`,
+    help: 'Share of all possible minutes they have played. Low means they might be on the bench.' },
+  { key: 'own',      label: 'Owned',  show: (p) => `${fixed(p.own)}%`,
+    help: 'Percentage of all FPL teams that own this player. Low = a "differential" that can help you catch up.' },
+];
+
+// Small coloured tag for players who are injured, doubtful, suspended or gone.
+function statusFlag(p) {
+  const tags = {
+    d: ['warn', p.chance != null ? `${p.chance}%` : 'Doubt'],
+    i: ['bad', 'Injured'],
+    s: ['bad', 'Banned'],
+    u: ['bad', 'Out'],
+  };
+  const tag = tags[p.status];
+  if (!tag) return null;
+  const f = el('span', `flag ${tag[0]}`, tag[1]);
+  f.title = p.news || 'Not available';
+  return f;
+}
 
 // ---------- Chart ----------
 
@@ -174,9 +232,9 @@ function drawStats() {
   let leader = null;
   for (const id of selected.keys()) {
     const p = players.get(id);
-    if (!leader || p.points.at(-1) > leader.points.at(-1)) leader = p;
+    if (!leader || p.total > leader.total) leader = p;
   }
-  $('stat-leader').textContent = leader ? `${leader.name} · ${leader.points.at(-1)}` : '–';
+  $('stat-leader').textContent = leader ? `${leader.name} · ${leader.total}` : '–';
 }
 
 function toggle(id) {
@@ -190,7 +248,49 @@ function toggle(id) {
   drawChart();
 }
 
-// ---------- Player lists ----------
+function setView(name) {
+  view = name;
+  for (const t of document.querySelectorAll('.tab[data-view]')) {
+    t.classList.toggle('active', t.dataset.view === name);
+    t.setAttribute('aria-selected', t.dataset.view === name);
+  }
+  $('chart-title').textContent = name === 'total' ? 'Cumulative points' : 'Points per gameweek';
+  $('axis-caption').textContent = name === 'total' ? 'Total points' : 'Points scored that gameweek';
+  drawChart();
+}
+
+// ---------- Filters ----------
+
+function passesFilters(p, withSearch = true) {
+  const pos = $('pos').value;
+  const maxPrice = Number.parseFloat($('max-price').value);
+  if (pos && p.pos !== pos) return false;
+  if (maxPrice && p.cost > maxPrice) return false;
+  if (!withSearch) return true;
+  const q = $('search').value.trim().toLowerCase();
+  return !q || p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q);
+}
+
+// ---------- Player table ----------
+
+function drawHead(id, sortable) {
+  const cells = [el('span'), el('span', '', 'Player')];
+  for (const col of COLUMNS) {
+    const cell = sortable ? el('button', sort.key === col.key ? 'sorted' : '', col.label) : el('span', '', col.label);
+    cell.title = col.help;
+    if (sortable) {
+      if (sort.key === col.key) cell.textContent += sort.dir < 0 ? ' ↓' : ' ↑';
+      cell.onclick = () => {
+        const dir = sort.key === col.key ? -sort.dir : (col.dir ?? -1);
+        sort = { key: col.key, dir };
+        drawHead('all-head', true);
+        drawAllList();
+      };
+    }
+    cells.push(cell);
+  }
+  $(id).replaceChildren(...cells);
+}
 
 function playerRow(p, pick = {}) {
   const li = el('li');
@@ -200,29 +300,26 @@ function playerRow(p, pick = {}) {
   const who = el('span', 'who');
   const name = el('span', 'name', p.name);
   if (pick.captain) name.append(el('span', 'badge', 'C'));
+  const flag = statusFlag(p);
+  if (flag) name.append(flag);
   who.append(name, el('span', 'team', p.team));
 
-  li.append(
-    el('span', 'check'),
-    who,
-    el('span', 'pos', POS_SHORT[p.pos] ?? p.pos),
-    el('span', 'num', p.cost != null ? `£${p.cost.toFixed(1)}m` : '–'),
-    el('span', 'num pts', p.points.at(-1) ?? 0),
-  );
+  li.append(el('span', 'check'), who);
+  for (const col of COLUMNS) li.append(el('span', col.cls ?? 'num', col.show(p)));
   li.onclick = () => toggle(p.id);
   return li;
 }
 
 function drawAllList() {
-  const q = $('search').value.trim().toLowerCase();
-  const pos = $('pos').value;
-  const rows = [];
-  for (const p of players.values()) {
-    if (pos && p.pos !== pos) continue;
-    if (q && !p.name.toLowerCase().includes(q) && !p.team.toLowerCase().includes(q)) continue;
-    rows.push(playerRow(p));
-  }
-  $('all-list').replaceChildren(...rows);
+  const { key, dir } = sort;
+  const list = [...players.values()]
+    .filter((p) => passesFilters(p))
+    .sort((a, b) => {
+      if (a[key] == null) return 1;
+      if (b[key] == null) return -1;
+      return (a[key] - b[key]) * dir || b.total - a.total;
+    });
+  $('all-list').replaceChildren(...list.map((p) => playerRow(p)));
   markSelected();
 }
 
@@ -238,24 +335,81 @@ function drawTeamList() {
   markSelected();
 }
 
-// Highlight rows that are on the chart, in both lists.
-function markSelected() {
-  for (const li of document.querySelectorAll('.player-list li[data-id]')) {
-    const slot = selected.get(Number(li.dataset.id));
-    li.classList.toggle('on', !!slot);
-    li.firstChild.style.setProperty('--c', slot ? `var(--s${slot})` : 'transparent');
-  }
+function drawKey() {
+  const items = COLUMNS.flatMap((c) => [el('dt', '', c.label), el('dd', '', c.help)]);
+  $('key-list').replaceChildren(...items);
 }
 
-function setView(name) {
-  view = name;
-  for (const t of document.querySelectorAll('.tab[data-view]')) {
-    t.classList.toggle('active', t.dataset.view === name);
-    t.setAttribute('aria-selected', t.dataset.view === name);
+// ---------- Quick picks ----------
+
+const PICKS = [
+  {
+    title: 'In form',
+    help: `Most points in the last ${FORM_WEEKS} gameweeks.`,
+    rank: (p) => p.form,
+    show: (p) => `${p.form} pts`,
+  },
+  {
+    title: 'Best value',
+    help: 'Most points for every £1m. Only players who play most weeks.',
+    keep: (p) => p.minsPct >= 50,
+    rank: (p) => p.value,
+    show: (p) => fixed(p.value),
+  },
+  {
+    title: 'Due a goal',
+    help: 'Getting great chances but not scoring yet. Goals often follow.',
+    keep: (p) => p.minsPct >= 50 && p.unlucky > 0,
+    rank: (p) => p.unlucky,
+    show: (p) => `+${fixed(p.unlucky)}`,
+  },
+  {
+    title: 'Hidden gems',
+    help: 'In form, but under 10% of teams own them. Great for catching up.',
+    keep: (p) => p.own < 10,
+    rank: (p) => p.form,
+    show: (p) => `${p.form} pts`,
+    sub: (p) => `${p.team} · ${fixed(p.own)}%`,
+  },
+];
+
+function drawPicks() {
+  const pool = [...players.values()].filter((p) => p.available && passesFilters(p, false));
+  const cards = PICKS.map((pick) => {
+    const top = pool
+      .filter((p) => !pick.keep || pick.keep(p))
+      .sort((a, b) => pick.rank(b) - pick.rank(a))
+      .slice(0, 5);
+
+    const ol = el('ol');
+    for (const p of top) {
+      const li = el('li');
+      li.dataset.id = p.id;
+      const nm = el('span', 'nm');
+      nm.append(el('b', '', p.name), el('small', '', pick.sub ? pick.sub(p) : `${p.team} · £${fixed(p.cost)}m`));
+      li.append(el('span', 'dot'), nm, el('span', 'v', pick.show(p)));
+      li.onclick = () => toggle(p.id);
+      ol.append(li);
+    }
+    const card = el('div', 'pick');
+    card.append(el('h3', '', pick.title), el('p', '', pick.help), ol);
+    return card;
+  });
+  $('picks').replaceChildren(...cards);
+
+  const pos = $('pos').selectedOptions[0].textContent;
+  const price = $('max-price').value ? ` · ${$('max-price').selectedOptions[0].textContent}` : '';
+  $('picks-pos').textContent = `· ${pos}${price}`;
+  markSelected();
+}
+
+// Highlight anything that's on the chart, in every list.
+function markSelected() {
+  for (const li of document.querySelectorAll('.player-list li[data-id], .pick li[data-id]')) {
+    const slot = selected.get(Number(li.dataset.id));
+    li.classList.toggle('on', !!slot);
+    li.firstChild.style.setProperty('--c', slot ? `var(--s${slot})` : '');
   }
-  $('chart-title').textContent = name === 'total' ? 'Cumulative points' : 'Points per gameweek';
-  $('axis-caption').textContent = name === 'total' ? 'Total points' : 'Points scored that gameweek';
-  drawChart();
 }
 
 function showTab(name) {
@@ -265,6 +419,7 @@ function showTab(name) {
   }
   $('tab-all').hidden = name !== 'all';
   $('tab-team').hidden = name !== 'team';
+  $('search-wrap').hidden = name !== 'all';
 }
 
 // ---------- My team ----------
@@ -295,7 +450,7 @@ function chartTeam() {
   const top = teamPicks
     .filter((pick) => !pick.bench && players.has(pick.id))
     .map((pick) => players.get(pick.id))
-    .sort((a, b) => b.points.at(-1) - a.points.at(-1))
+    .sort((a, b) => b.total - a.total)
     .slice(0, MAX_ON_CHART);
   selected = new Map(top.map((p, i) => [p.id, i + 1]));
   drawChart();
@@ -311,12 +466,20 @@ async function init() {
   const data = await res.json();
   gameweeks = data.gameweeks;
   players = new Map(data.players.map((p) => [p.id, p]));
+  players.forEach(addStats);
   $('season-info').textContent = `Season 2026/27 · Data up to GW${gameweeks} · ${players.size} players`;
+
+  drawKey();
+  drawHead('all-head', true);
+  drawHead('team-head', false);
   drawAllList();
+  drawPicks();
   drawChart();
 
   $('search').addEventListener('input', drawAllList);
-  $('pos').addEventListener('change', drawAllList);
+  for (const id of ['pos', 'max-price']) {
+    $(id).addEventListener('change', () => { drawAllList(); drawPicks(); });
+  }
   for (const t of document.querySelectorAll('.tab[data-tab]')) t.addEventListener('click', () => showTab(t.dataset.tab));
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);

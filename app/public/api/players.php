@@ -41,8 +41,10 @@ foreach (readCsv("$dir/players.csv") as $p) {
     ];
 }
 
-// total_points in playerstats is already a running season total per gameweek.
+// total_points, minutes, goals etc. in playerstats are running season totals per gameweek.
+// Rows aren't in gameweek order, so keep the newest row per player for the "right now" stats.
 $maxGw = 0;
+$latest = [];
 foreach (readCsv("$dir/playerstats.csv") as $s) {
     $id = (int) $s['id'];
     $gw = (int) $s['gw'];
@@ -50,8 +52,27 @@ foreach (readCsv("$dir/playerstats.csv") as $s) {
         continue;
     }
     $players[$id]['points'][$gw] = (int) $s['total_points'];
-    $players[$id]['cost'] = (float) $s['now_cost'];
+    if ($gw >= (int) ($latest[$id]['gw'] ?? 0)) {
+        $latest[$id] = $s;
+    }
     $maxGw = max($maxGw, $gw);
+}
+
+foreach ($latest as $id => $s) {
+    $players[$id] += [
+        'status'   => $s['status'],                 // a = available, d = doubtful, i = injured, s = suspended, u = unavailable
+        'news'     => $s['news'],
+        'chance'   => $s['chance_of_playing_next_round'] === '' ? null : (int) $s['chance_of_playing_next_round'],
+        'own'      => (float) $s['selected_by_percent'],
+        'predNext' => (float) $s['ep_next'],        // FPL's own predicted points for the next gameweek
+        'minutes'  => (int) $s['minutes'],
+        'starts'   => (int) $s['starts'],
+        'goals'    => (int) $s['goals_scored'],
+        'assists'  => (int) $s['assists'],
+        'xgi'      => (float) $s['expected_goal_involvements'],
+        'boughtGw' => (int) $s['transfers_in_event'],
+    ];
+    $players[$id]['cost'] = (float) $s['now_cost'];
 }
 
 // Turn points into a plain array (index 0 = GW1), carrying the total forward over any missing weeks.
