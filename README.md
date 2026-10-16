@@ -24,7 +24,7 @@ git clone --recurse-submodules https://github.com/paulbrab/fpl-points-tracker.gi
 cd fpl-points-tracker
 ```
 
-The player data lives in a separate project ([FPL-Elo-Insights](https://github.com/olbauday/FPL-Elo-Insights)). `--recurse-submodules` downloads it too, about 20MB. If you forgot that flag, run:
+The player data lives in a separate project ([FPL-Core-Insights](https://github.com/olbauday/FPL-Core-Insights), kept in the `FPL-Elo-Insights` folder, its old name). `--recurse-submodules` downloads it too, about 20MB. If you forgot that flag, run:
 
 ```sh
 git submodule update --init --depth 1
@@ -52,13 +52,13 @@ To find your team ID, open your **Points** page on the FPL website. The number i
 
 ## Keeping the data up to date
 
-The player data is updated **twice a day, at 07:30 and 17:30 UTC**. Get the latest with:
+The player data is updated **several times a day**. The top bar shows how old your copy is, and says **Newer data available** when there's an update. Get it with:
 
 ```sh
 git submodule update --remote --depth 1
 ```
 
-Run it after an update time, especially before you make transfers. `git status` will then show `FPL-Elo-Insights` as changed. That's normal.
+Run it before you make transfers. `git status` will then show `FPL-Elo-Insights` as changed. That's normal.
 
 Your team, your league and rivals' teams are fetched live from the FPL website, so they're always current. League data is saved for 10 minutes to go easy on the FPL website.
 
@@ -168,11 +168,11 @@ Run it yourself: `python3 tools/backtest_projections.py FPL-Elo-Insights/data`
 | `app/public/api/teams.php` | Saves the team list |
 | `tools/backtest_fixtures.py` | Tests the fixture difficulty model against past seasons |
 | `tools/backtest_projections.py` | Tests the points projections (used by the chip planner) against last season |
-| `FPL-Elo-Insights/` | The player data ([separate project](https://github.com/olbauday/FPL-Elo-Insights), linked as a git submodule) |
+| `FPL-Elo-Insights/` | The player data ([FPL-Core-Insights](https://github.com/olbauday/FPL-Core-Insights), linked as a git submodule) |
 
 ## Credits
 
-- **Player and match data:** [FPL-Elo-Insights](https://github.com/olbauday/FPL-Elo-Insights) by olbauday, the data engine behind [fplcore.com](https://fplcore.com). Thank you for keeping it open.
+- **Player and match data:** [FPL-Core-Insights](https://github.com/olbauday/FPL-Core-Insights) (formerly FPL-Elo-Insights) by olbauday, the data engine behind [fplcore.com](https://fplcore.com). Thank you for keeping it open.
 - **Charts:** [Chart.js](https://www.chartjs.org/).
 - **Font:** [Inter](https://rsms.me/inter/).
 
