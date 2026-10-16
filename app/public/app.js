@@ -235,6 +235,7 @@ function drawChart() {
   chart.options.scales.x.offset = view === 'gw';
   chart.update();
   $('chart-empty').hidden = selected.size > 0;
+  $('clear-chart').hidden = selected.size === 0;
   drawLegend();
   drawStats();
   markSelected();
@@ -932,6 +933,7 @@ async function init() {
   for (const t of document.querySelectorAll('.tab[data-tab]')) t.addEventListener('click', () => showTab(t.dataset.tab));
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);
+  $('clear-chart').addEventListener('click', () => compare([]));
   $('league-pick').addEventListener('change', loadLeague);
   $('form-weeks').addEventListener('change', () => {
     const n = Number($('form-weeks').value);

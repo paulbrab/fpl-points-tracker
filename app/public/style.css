@@ -366,3 +366,7 @@ li.on .check { border-color: var(--c); }
 .league-list .up { color: var(--good); }
 .league-list .down { color: var(--bad-text); }
 .league-list .gap { color: var(--text-2); }
+
+/* ---------- Chart header actions ---------- */
+
+.head-actions { display: flex; align-items: center; gap: 8px; }

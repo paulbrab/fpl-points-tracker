@@ -21,9 +21,12 @@
       <section class="panel chart-panel">
         <div class="panel-head">
           <h2 id="chart-title">Cumulative points</h2>
-          <div class="tabs" role="tablist" aria-label="Chart view">
-            <button class="tab view active" data-view="total" role="tab">Total</button>
-            <button class="tab view" data-view="gw" role="tab">Per gameweek</button>
+          <div class="head-actions">
+            <button type="button" class="btn ghost small" id="clear-chart" hidden title="Remove every player from the chart">Clear</button>
+            <div class="tabs" role="tablist" aria-label="Chart view">
+              <button class="tab view active" data-view="total" role="tab">Total</button>
+              <button class="tab view" data-view="gw" role="tab">Per gameweek</button>
+            </div>
           </div>
         </div>
 
