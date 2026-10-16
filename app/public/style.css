@@ -169,7 +169,6 @@ input, select {
   outline: none;
 }
 input:focus, select:focus { border-color: var(--axis); }
-#team-id { flex: 1; min-width: 0; }
 .search { flex: 1; position: relative; display: flex; }
 .search input { flex: 1; min-width: 0; padding-left: 30px; }
 .search svg {
@@ -286,3 +285,15 @@ li.on .check { border-color: var(--c); }
   .filters { flex-wrap: wrap; }
   .value { font-size: 16px; }
 }
+
+/* ---------- Saved household teams ---------- */
+
+#team-pick { flex: 1; min-width: 0; font-weight: 500; }
+.team-editor { background: var(--surface-2); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.team-editor .filters { margin: 8px 0; }
+.team-editor input { flex: 1; min-width: 0; }
+#saved-teams { list-style: none; padding: 0; margin: 0; }
+#saved-teams li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+#saved-teams li span:first-child { font-weight: 500; flex: 1; }
+#saved-teams button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
+#saved-teams button:hover { color: var(--text); }

@@ -72,8 +72,8 @@
         </div>
       </div>
 
-      <div class="filters">
-        <label class="search" id="search-wrap">
+      <div class="filters" id="list-filters">
+        <label class="search">
           <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
           <input id="search" type="search" placeholder="Search name or team" aria-label="Search players">
         </label>
@@ -107,12 +107,23 @@
           </div>
 
           <div class="tab-body" id="tab-team" hidden>
-            <form id="team-form" class="filters">
-              <input id="team-id" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Your FPL team ID" aria-label="FPL team ID" required>
-              <button type="submit" class="btn">Load team</button>
-            </form>
+            <div class="filters">
+              <select id="team-pick" aria-label="Choose a team"></select>
+              <button type="button" class="btn ghost" id="edit-teams">Edit teams</button>
+            </div>
+
+            <div class="team-editor" id="team-editor" hidden>
+              <ul id="saved-teams"></ul>
+              <form id="add-team" class="filters">
+                <input id="new-name" type="text" maxlength="30" placeholder="Name, e.g. Dad" aria-label="Name" required>
+                <input id="new-id" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="FPL team ID" aria-label="FPL team ID" required>
+                <button type="submit" class="btn">Add</button>
+              </form>
+              <p class="msg">Find an ID in the FPL site address bar: fantasy.premierleague.com/entry/<b>1234567</b>/event/… Saved for everyone in the house.</p>
+            </div>
+
             <div class="team-head">
-              <p class="msg" id="team-msg">Find your ID in the FPL site address bar: fantasy.premierleague.com/entry/<b>1234567</b>/event/…</p>
+              <p class="msg" id="team-msg">Add your teams with "Edit teams" to get started.</p>
               <button type="button" class="btn ghost small" id="chart-team" hidden title="Replace the chart with the 8 highest scorers in your starting XI">Chart my top 8</button>
             </div>
             <div class="table-head" id="team-head"></div>

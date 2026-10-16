@@ -9,6 +9,7 @@ let players = new Map();   // id -> player
 let gameweeks = 0;
 let selected = new Map();  // id -> colour slot (1-8); a player keeps their colour while on the chart
 let teamPicks = [];
+let savedTeams = [];       // [{ name, id }] shared by everyone in the house
 let view = 'total';        // 'total' = running total line, 'gw' = points per gameweek bars
 let sort = { key: 'total', dir: -1 };
 let chart;
@@ -419,7 +420,7 @@ function showTab(name) {
   }
   $('tab-all').hidden = name !== 'all';
   $('tab-team').hidden = name !== 'team';
-  $('search-wrap').hidden = name !== 'all';
+  $('list-filters').hidden = name !== 'all';
 }
 
 // ---------- My team ----------
@@ -443,6 +444,57 @@ async function loadTeam(id) {
     $('chart-team').hidden = true;
   }
   drawTeamList();
+}
+
+// ---------- Saved household teams ----------
+
+async function saveTeams(list) {
+  const res = await fetch('api/teams.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(list),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Could not save.');
+  savedTeams = data;
+  drawSavedTeams();
+}
+
+function drawSavedTeams() {
+  const pick = $('team-pick');
+  const current = pick.value;
+  const options = savedTeams.map((t) => {
+    const o = el('option', '', t.name);
+    o.value = t.id;
+    return o;
+  });
+  if (!savedTeams.length) options.push(el('option', '', 'No teams yet'));
+  pick.replaceChildren(...options);
+  if (savedTeams.some((t) => String(t.id) === current)) pick.value = current;
+
+  const rows = savedTeams.map((t, i) => {
+    const li = el('li');
+    const x = el('button', '', '×');
+    x.title = `Remove ${t.name}`;
+    x.onclick = () => saveTeams(savedTeams.filter((_, j) => j !== i)).catch((e) => alert(e.message));
+    li.append(el('span', '', t.name), el('span', 'dim', t.id), x);
+    return li;
+  });
+  $('saved-teams').replaceChildren(...rows);
+}
+
+async function initSavedTeams() {
+  try {
+    savedTeams = await (await fetch('api/teams.php')).json();
+  } catch {
+    savedTeams = [];
+  }
+  let last = null;
+  try { last = localStorage.getItem('fplTeamId'); } catch {}
+  drawSavedTeams();
+  if (savedTeams.some((t) => String(t.id) === last)) $('team-pick').value = last;
+  if (!savedTeams.length) $('team-editor').hidden = false;
+  else loadTeam($('team-pick').value);
 }
 
 // Replace the chart with the highest scorers from the starting XI.
@@ -483,18 +535,23 @@ async function init() {
   for (const t of document.querySelectorAll('.tab[data-tab]')) t.addEventListener('click', () => showTab(t.dataset.tab));
   for (const t of document.querySelectorAll('.tab[data-view]')) t.addEventListener('click', () => setView(t.dataset.view));
   $('chart-team').addEventListener('click', chartTeam);
-  $('team-form').addEventListener('submit', (e) => {
+  $('team-pick').addEventListener('change', () => loadTeam($('team-pick').value));
+  $('edit-teams').addEventListener('click', () => { $('team-editor').hidden = !$('team-editor').hidden; });
+  $('add-team').addEventListener('submit', async (e) => {
     e.preventDefault();
-    loadTeam($('team-id').value.trim());
+    const team = { name: $('new-name').value.trim(), id: Number($('new-id').value) };
+    try {
+      await saveTeams([...savedTeams, team]);
+      e.target.reset();
+      $('team-pick').value = team.id;
+      loadTeam(team.id);
+    } catch (err) {
+      alert(err.message);
+    }
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
-  let saved = null;
-  try { saved = localStorage.getItem('fplTeamId'); } catch {}
-  if (saved) {
-    $('team-id').value = saved;
-    loadTeam(saved);
-  }
+  initSavedTeams();
 }
 
 init().catch((e) => {
