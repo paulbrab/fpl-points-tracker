@@ -85,7 +85,7 @@ const COLUMNS = [
   { key: 'own',      label: 'Owned',  show: (p) => `${fixed(p.own)}%`,
     help: 'Percentage of all FPL teams that own this player. Low = a "differential" that can help you catch up.' },
   { key: 'run',      label: 'Run',    show: (p) => fixed(p.run), dir: 1,
-    help: 'How hard their next 5 games are: 1 = very easy, 5 = very hard. Attackers are judged on goals their team should score, defenders on goals they should let in.' },
+    help: "How hard their next 5 games are: 1 = very easy, 5 = very hard. Attackers are judged on how good the opponent's defence is, defenders on the opponent's attack." },
   { key: null,       label: 'Next 5 games', show: (p) => fixtureChips(p), cls: 'fx-cell',
     help: 'Upcoming opponents. CAPITALS = home game, small letters = away. Green = easy, red = hard. Hover for details.' },
 ];

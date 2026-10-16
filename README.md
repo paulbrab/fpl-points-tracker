@@ -28,7 +28,11 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 
 ## How fixture difficulty works
 
-Each team gets an attack and a defence rating from the expected goals (xG) in this season's matches. For every upcoming game we estimate goals for and against. Attackers are rated on goals their team should score; defenders and keepers on goals they should let in. Games are split into fifths: 1 = easiest, 5 = hardest. Early in the season the ratings are pulled towards average so a few lucky games don't count too much.
+Difficulty is about **the opponent** (like FPL's own ratings), worked out from expected goals (xG):
+
+- Attackers are rated on how good the opponent's **defence** is. Defenders and keepers are rated on how good the opponent's **attack** is. Home games are a bit easier.
+- Every team starts from **last season's** ratings, counted as if they'd already played 10 games. This season's matches gradually take over, so one freak result early on doesn't change much. Promoted teams start like last season's three weakest sides.
+- Games are split into fifths: 1 = easiest, 5 = hardest.
 
 ## Run it
 
