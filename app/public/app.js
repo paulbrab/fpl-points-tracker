@@ -1159,8 +1159,38 @@ async function loadLeague() {
   drawLeague();
 }
 
+// Chips a manager can still play in the current half of the season.
+const CHIP_SHORT = { wildcard: 'WC', freehit: 'FH', bboost: 'BB', '3xc': 'TC' };
+function chipsLeft(m) {
+  return (team?.chipRules ?? [])
+    .filter((r) => r.start <= nextGw && r.stop >= nextGw)
+    .filter((r) => !(m.chipsUsed ?? []).some((u) => u.name === r.name && u.gw >= r.start && u.gw <= r.stop))
+    .map((r) => r.name);
+}
+
+// "Triple Captain: 5 of 6 rivals still have it", so you know what they can still throw at you.
+function drawLeagueChips() {
+  const box = $('league-chips');
+  const rivals = league?.managers.filter((m) => m.entry !== team?.id) ?? [];
+  const current = (team?.chipRules ?? []).filter((r) => r.start <= nextGw && r.stop >= nextGw);
+  box.hidden = !rivals.length || !current.length;
+  if (box.hidden) return;
+  const stop = Math.max(...current.map((r) => r.stop));
+  const counts = CHIP_ORDER.map((name) => {
+    const n = rivals.filter((m) => chipsLeft(m).includes(name)).length;
+    return `${CHIP_NAMES[name]} ${n}/${rivals.length}`;
+  });
+  box.replaceChildren(
+    el('b', '', `Rivals' chips left (until GW${stop}): `),
+    counts.join(' · '),
+    el('br'),
+    el('span', 'dim', 'Tags on each team: WC = Wildcard, FH = Free Hit, BB = Bench Boost, TC = Triple Captain. Crossed out = used.'),
+  );
+}
+
 function drawLeague() {
   drawStandings();
+  drawLeagueChips();
   drawLeagueAdvice();
   if (raceMode()) drawChart();
 }
@@ -1190,7 +1220,16 @@ function drawStandings() {
     }
     if (isMe) name.append(el('span', 'badge', 'You'));
     if (m.chip) name.append(el('span', 'flag warn', m.chip.replace('3xc', 'triple captain').replace('bboost', 'bench boost')));
-    who.append(name, el('span', 'team', m.player));
+    const sub = el('span', 'team', m.player);
+    const left = chipsLeft(m);
+    for (const chip of CHIP_ORDER) {
+      if (!(team?.chipRules ?? []).some((r) => r.name === chip)) continue;
+      const has = left.includes(chip);
+      const tag = el('span', has ? 'chiptag' : 'chiptag gone', CHIP_SHORT[chip]);
+      tag.title = `${CHIP_NAMES[chip]}: ${has ? 'still to play' : 'used'}`;
+      sub.append(tag);
+    }
+    who.append(name, sub);
 
     const gap = me && !isMe ? m.total - me.total : null;
     let gapText = '–';

@@ -92,7 +92,7 @@ On the *My league* tab the chart becomes the **league race**: you plus the top o
 |---|---|
 | All players | Every player. Click a column name to sort. Filter by position and price. Hover a column name, or open "What do the columns mean?", for an explanation. |
 | My team | Pick a team from the dropdown. Shows the squad, bench, money in the bank, overall rank and predicted points. "Form" can be set per team (default: last 5 gameweeks). |
-| My league | Standings for one of your private leagues. Click a rival to compare against just them. |
+| My league | Standings for one of your private leagues, with each team's chips still to play (WC, FH, BB, TC; crossed out = used). Click a rival to compare against just them. |
 | Chips | Which chips you've used and which are left (you get two sets: one for GW1–19, one for GW20–38). A planner shows the best week for Bench Boost and Triple Captain, and flags blank and double gameweeks. |
 
 **Panel under the chart** changes with the tab:
